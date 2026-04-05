@@ -1,0 +1,19 @@
+# Environment secrets — NEVER commit .env
+.env
+.env.local
+.env.production
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+*.egg-info/
+dist/
+build/
+
+# Results
+results/
+
+# pytest
+.pytest_cache/
