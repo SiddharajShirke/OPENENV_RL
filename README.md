@@ -28,7 +28,7 @@ graph TD
 To prevent simulation crashes due to API rate limits (429) or endpoint deprecation (404), the system implements a **Cyclic 10-Model Fallback Sequence**.
 
 ```mermaid
-state_machine
+stateDiagram-v2
     [*] --> PrimaryModel
     PrimaryModel --> Success: "200 OK"
     PrimaryModel --> Failure: "429 / 404 / 403"
