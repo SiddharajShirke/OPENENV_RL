@@ -8,6 +8,60 @@ const AGENT_MODES = [
   { value: "trained_rl", label: "Trained RL Checkpoint" },
 ];
 
+function recommendedSteps(taskId) {
+  if (taskId === "cross_department_hard") return 70;
+  if (taskId === "mixed_urgency_medium") return 60;
+  return 40;
+}
+
+function shortModelName(raw) {
+  const text = String(raw || "").trim();
+  if (!text) return "-";
+  const normalized = text.replaceAll("\\", "/");
+  const parts = normalized.split("/");
+  return parts[parts.length - 1] || text;
+}
+
+function parseLog(line) {
+  const text = String(line || "");
+  const start = text.match(/^\[START\]\s+task=([^\s]+)\s+env=([^\s]+)\s+model=(.+)$/);
+  if (start) {
+    return { kind: "start", task: start[1], env: start[2], model: start[3], raw: text };
+  }
+  const step = text.match(
+    /^\[STEP\]\s+step=(\d+)\s+action=(.+?)\s+reward=(-?\d+(?:\.\d+)?)\s+done=(true|false)\s+error=(.+?)(?:\s+source=([^\s]+))?(?:\s+model=(.+?))?(?:\s+repair=(.+?))?(?:\s+switch=(.+))?$/
+  );
+  if (step) {
+    return {
+      kind: "step",
+      step: Number(step[1]),
+      action: step[2],
+      reward: Number(step[3]),
+      done: step[4] === "true",
+      error: step[5] === "null" ? null : step[5],
+      source: step[6] || null,
+      model: step[7] || null,
+      repair: step[8] && step[8] !== "null" ? step[8] : null,
+      switch: step[9] && step[9] !== "null" ? step[9] : null,
+      raw: text,
+    };
+  }
+  const end = text.match(
+    /^\[END\]\s+success=(true|false)\s+steps=(\d+)\s+score=(-?\d+(?:\.\d+)?)\s+rewards=(.*)$/
+  );
+  if (end) {
+    return {
+      kind: "end",
+      success: end[1] === "true",
+      steps: Number(end[2]),
+      score: Number(end[3]),
+      rewards: end[4],
+      raw: text,
+    };
+  }
+  return { kind: "info", raw: text };
+}
+
 export function SimulationModule({
   tasks,
   agents,
@@ -39,12 +93,31 @@ export function SimulationModule({
     if (preferredModelType) setModelType(preferredModelType);
   }, [preferredModelPath, preferredModelType]);
 
+  useEffect(() => {
+    const rec = recommendedSteps(taskId);
+    setMaxSteps((prev) => {
+      const v = Number(prev || 0);
+      if (agentMode === "llm_inference" && v < rec) return rec;
+      return v || rec;
+    });
+  }, [taskId, agentMode]);
+
   const refreshSimulationHistory = async () => {
     try {
       const res = await api("/history/simulations");
       setHistoryRuns(res.runs || []);
     } catch (_err) {
       setHistoryRuns([]);
+    }
+  };
+
+  const clearSimulationHistory = async () => {
+    try {
+      const res = await api("/history/simulations", { method: "DELETE" });
+      setHistoryRuns([]);
+      onStatus(`Simulation history cleared (${res.deleted_rows || 0}).`);
+    } catch (err) {
+      onStatus(err.message);
     }
   };
 
@@ -111,6 +184,9 @@ export function SimulationModule({
       });
       setRunning(true);
       onStatus(`Simulation started (${started.run_id.slice(0, 8)}).`);
+      if (agentMode === "llm_inference" && Number(maxSteps) < recommendedSteps(taskId)) {
+        onStatus(`Max steps auto-adjusted to ${started.max_steps} for better horizon on ${taskId}.`);
+      }
     } catch (err) {
       onStatus(err.message);
     } finally {
@@ -178,6 +254,14 @@ export function SimulationModule({
   const current = trace.length ? trace[trace.length - 1] : null;
   const rewardSeries = useMemo(() => trace.map((t) => Number(t.reward || 0)), [trace]);
   const backlogSeries = useMemo(() => trace.map((t) => Number(t.backlog || 0)), [trace]);
+  const cumulativeRewardSeries = useMemo(() => {
+    let acc = 0;
+    return trace.map((t) => {
+      acc += Number(t.reward || 0);
+      return acc;
+    });
+  }, [trace]);
+  const parsedLogs = useMemo(() => logs.map(parseLog), [logs]);
 
   return (
     <section className="module-grid">
@@ -255,7 +339,14 @@ export function SimulationModule({
           <button className="ghost" onClick={stopSimulation} disabled={!running}>
             Stop
           </button>
+          <button className="ghost" onClick={clearSimulationHistory}>
+            Clear Saved History
+          </button>
         </div>
+        {running ? <p className="muted">Simulation is running live. New steps stream below automatically.</p> : null}
+        {agentMode === "llm_inference" ? (
+          <p className="muted">Recommended steps for {taskId}: {recommendedSteps(taskId)} (auto-enforced minimum for LLM mode).</p>
+        ) : null}
         {routePlan.length ? (
           <div style={{ marginTop: 12 }}>
             <div className="muted" style={{ marginBottom: 6 }}>
@@ -280,6 +371,11 @@ export function SimulationModule({
           </article>
 
           <article className="panel">
+            <h3>Cumulative Reward Trend</h3>
+            <LineChart seriesA={cumulativeRewardSeries} seriesB={backlogSeries} labelA="Cum Reward" labelB="Backlog" />
+          </article>
+
+          <article className="panel">
             <h3>Current Step</h3>
             {current ? (
               <div className="step-card animate-in">
@@ -293,13 +389,14 @@ export function SimulationModule({
                   <span>Backlog: {current.backlog}</span>
                   <span>Source: {current.decision_source || "-"}</span>
                   <span>Provider: {current.provider || "-"}</span>
-                  <span>Model: {current.model_used || "-"}</span>
+                  <span>Model: {shortModelName(current.model_used)}</span>
                   {current.llm_attempts != null ? <span>LLM Attempts: {current.llm_attempts}</span> : null}
                   {current.repair_note ? <span>Repair: {current.repair_note}</span> : null}
+                  {current.switch_note ? <span>Switch: {current.switch_note}</span> : null}
                   {current.llm_error ? <span>Error: {current.llm_error}</span> : null}
                 </div>
                 <div className="queue-list">
-                  {current.queue_rows.map((q) => (
+                  {(Array.isArray(current.queue_rows) ? current.queue_rows : []).map((q) => (
                     <div key={q.service} className="queue-row">
                       <div className="queue-label">{q.service}</div>
                       <div className="queue-bar-wrap">
@@ -315,7 +412,48 @@ export function SimulationModule({
 
           <article className="panel">
             <h3>Live Logs</h3>
-            <pre className="terminal-log">{logs.join("\n")}</pre>
+            <div className="log-grid">
+              {parsedLogs.map((entry, idx) => (
+                <div key={`${idx}-${entry.kind}`} className={`log-card log-${entry.kind}`}>
+                  {entry.kind === "start" ? (
+                    <>
+                      <div className="log-title">START</div>
+                      <div className="log-row">Task: <strong>{entry.task}</strong></div>
+                      <div className="log-row">Env: {entry.env}</div>
+                      <div className="log-row">Model: {entry.model}</div>
+                    </>
+                  ) : null}
+                  {entry.kind === "step" ? (
+                    <>
+                      <div className="log-title">STEP {entry.step}</div>
+                      <div className="log-row">Action: <span className="mono">{entry.action}</span></div>
+                      <div className="log-row">Reward: <strong>{fmt(entry.reward, 2)}</strong></div>
+                      <div className="log-row">Done: {String(entry.done)}</div>
+                      <div className="log-row">Error: {entry.error || "null"}</div>
+                      <div className="log-row">Source: {entry.source || "-"}</div>
+                      <div className="log-row">Model: {shortModelName(entry.model)}</div>
+                      {entry.repair ? <div className="log-row">Repair: {entry.repair}</div> : null}
+                      {entry.switch ? <div className="log-row">Switch: {entry.switch}</div> : null}
+                    </>
+                  ) : null}
+                  {entry.kind === "end" ? (
+                    <>
+                      <div className="log-title">END</div>
+                      <div className="log-row">Success: <strong>{String(entry.success)}</strong></div>
+                      <div className="log-row">Steps: {entry.steps}</div>
+                      <div className="log-row">Score: <strong>{fmt(entry.score, 3)}</strong></div>
+                      <div className="log-row">Rewards: <span className="mono">{entry.rewards || "-"}</span></div>
+                    </>
+                  ) : null}
+                  {entry.kind === "info" ? (
+                    <>
+                      <div className="log-title">INFO</div>
+                      <div className="log-row mono">{entry.raw}</div>
+                    </>
+                  ) : null}
+                </div>
+              ))}
+            </div>
           </article>
         </>
       ) : null}
@@ -360,7 +498,28 @@ export function SimulationModule({
               <span>LLM Repaired Steps</span>
               <strong>{result.summary?.llm_repaired_steps ?? "-"}</strong>
             </div>
+            <div className="metric-card">
+              <span>Invalid Action Rate</span>
+              <strong>{fmt((result.summary?.invalid_action_rate ?? 0) * 100, 1)}%</strong>
+            </div>
+            <div className="metric-card">
+              <span>Repaired Action Rate</span>
+              <strong>{fmt((result.summary?.repaired_action_rate ?? 0) * 100, 1)}%</strong>
+            </div>
+            <div className="metric-card">
+              <span>Auto Switch Count</span>
+              <strong>{result.summary?.auto_switch_count ?? 0}</strong>
+            </div>
+            <div className="metric-card">
+              <span>Effective Max Steps</span>
+              <strong>{result.summary?.effective_max_steps ?? "-"}</strong>
+            </div>
           </div>
+          {result.summary?.last_switch_reason ? (
+            <p className="muted" style={{ marginTop: 10 }}>
+              Last auto-switch reason: {result.summary.last_switch_reason}
+            </p>
+          ) : null}
           {Array.isArray(result.summary?.llm_route) && result.summary.llm_route.length ? (
             <div style={{ marginTop: 12 }}>
               <div className="muted" style={{ marginBottom: 6 }}>

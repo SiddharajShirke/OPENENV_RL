@@ -1,103 +1,151 @@
-﻿# Gov Workflow OpenEnv
+---
+title: OPENENV_RL_08_04
+emoji: "🏛️"
+colorFrom: gray
+colorTo: blue
+sdk: docker
+app_port: 7860
+pinned: false
+---
 
-Real-world OpenEnv environment for government-service workflow optimization.
+# Gov Workflow OpenEnv
 
-This project implements an OpenEnv-style environment where agents learn through the standard `reset()` / `step()` / `state()` API, and are graded deterministically across three task difficulties.
+Real-world OpenEnv environment for government-service workflow optimization, with a full FastAPI bridge, RL training stack, and React operations UI.
 
-## What This Project Solves
-District offices handle high-volume citizen applications (passport, birth certificate, income certificate, GST, etc.). Delay is often caused by operational choices:
+## What This Application Is
+
+This project simulates a real administrative workload that humans perform in district/public-service offices:
+
 - queue prioritization
-- missing-document recovery
-- staffing allocation across services
-- escalation discipline
-- fairness balancing across service categories
+- officer allocation and reallocation
+- missing document follow-up
+- escalation budget management
+- SLA/fairness balancing
 
-This environment simulates that operational layer so we can train/evaluate agents on a real-world workflow task (not a game).
+Agents interact through OpenEnv-style APIs (`reset / step / state / grade`) and can be evaluated with deterministic graders.
 
-## Current Progress (As Of 2026-04-08)
-- OpenEnv-compatible environment implemented with typed Pydantic models.
-- 3 tasks implemented: easy, medium, hard.
-- Deterministic graders implemented and tested (`score` in `[0.0, 1.0]`).
-- Dense reward shaping with partial progress + penalties implemented.
-- Baseline runner (`baseline_openai.py`) available.
-- Submission-style inference runner (`inference.py`) available with strict `[START]/[STEP]/[END]` logging.
-- RL pipeline implemented:
-  - Phase 1 Maskable PPO (28-action design)
-  - Phase 2 curriculum PPO
-  - Phase 3 recurrent PPO implemented but currently underperforming vs Phase 2
-- Frontend modules implemented: Overview, Simulation Lab, Training Studio, Model Comparison.
-- FastAPI is the orchestration bridge for simulation/training/comparison workflows.
-- Persistence layer implemented (SQLite + filesystem).
-- Docker image builds successfully and serves `/ui` + API.
-- `openenv validate` passes.
-
-## Repository Architecture
+## Current Module Architecture
 
 ```mermaid
 flowchart LR
-  UI[React UI /ui] --> API[FastAPI app.main]
-  CLI1[baseline_openai.py] --> API
-  CLI2[inference.py] --> API
-  API --> ENV[GovWorkflowEnv]
-  API --> RL[RL wrappers + evaluators]
-  RL --> ENV
-  API --> PERSIST[(SQLite + filesystem)]
+  UI["React UI (/ui)"] --> API["FastAPI Bridge (app/main.py)"]
+  API --> ENV["GovWorkflowEnv (app/env.py)"]
+  API --> SIM["Simulation Runtime (app/simulator.py)"]
+  API --> RL["RL Jobs + Evaluate (rl/*)"]
+  API --> STORE["SQLite + Filesystem (app/persistence.py)"]
+  CLI1["baseline_openai.py"] --> API
+  CLI2["inference.py"] --> API
 ```
 
 ```mermaid
-flowchart TD
-  A[Agent action] --> B[POST /step]
-  B --> C[Validate action + transition]
-  C --> D[Reward computation]
-  D --> E[Observation + StepInfo]
-  E --> F[Episode continues or ends]
-  F --> G[POST /grade deterministic score 0..1]
+sequenceDiagram
+  participant User
+  participant UI as React UI
+  participant API as FastAPI
+  participant Env as GovWorkflowEnv
+  User->>UI: Start simulation/training/comparison
+  UI->>API: /api/* request
+  API->>Env: reset/step/state
+  Env-->>API: observation + reward + done + info
+  API-->>UI: structured response + summary
+  API->>API: persist history/jobs
 ```
 
 ## OpenEnv Compliance
-Manifest:
+
+OpenEnv manifest:
+
 - `openenv.yaml`
 
-Core typed models:
+Typed Pydantic models (core contract):
+
+- `ActionModel`
+- `ObservationModel`
+- `RewardModel`
+- `StepInfoModel`
+- `EpisodeStateModel`
+
+Files:
+
 - `app/models.py`
-  - `ActionModel`
-  - `ObservationModel`
-  - `RewardModel`
-  - `EpisodeStateModel`
-  - `StepInfoModel`
-
-Environment kernel:
 - `app/env.py`
-
-FastAPI bridge:
 - `app/main.py`
 
-OpenEnv API shape available:
+Environment endpoints:
+
 - `POST /reset`
 - `POST /step`
 - `GET /state`
 - `POST /state`
 - `POST /grade`
 
-Validation command:
+Validation:
+
 ```bash
 openenv validate
 ```
 
-## Task Set and Difficulty
-Defined in `app/tasks.py`:
-- `district_backlog_easy`
-- `mixed_urgency_medium`
-- `cross_department_hard`
+## Tasks, Difficulty, and Grading
 
-Graders in `app/graders.py`:
-- deterministic scoring
-- bounded `[0, 1]`
-- task-specific criteria weighting
+Task definitions: `app/tasks.py`
+
+1. `district_backlog_easy`
+2. `mixed_urgency_medium`
+3. `cross_department_hard`
+
+Graders: `app/graders.py`
+
+- deterministic
+- score in `[0.0, 1.0]`
+- per-task weighted criteria
+
+## Feature Modules (UI + Backend)
+
+### 1) Overview Module
+
+- shows environment purpose, workflow, tasks, and available system components
+- frontend: `frontend/react/src/modules/OverviewModule.jsx`
+
+### 2) Simulation Lab
+
+- runs baseline / llm_inference / trained_rl simulations
+- live step-by-step logs and metrics cards
+- trajectory charts (reward/backlog, cumulative reward)
+- LLM runtime guardrails:
+  - stricter schema prompting
+  - runtime action mask + repair bias
+  - adaptive model fallback ranking
+  - auto-recovery switching on repeated failure pattern
+- history load/clear support
+- frontend: `frontend/react/src/modules/SimulationModule.jsx`
+- backend: `app/simulator.py`, `app/main.py`
+
+### 3) Training Studio
+
+- starts/stops background RL training jobs
+- tracks progress/logs/evaluation rows
+- unique model artifact naming per run
+- persisted job history
+- frontend: `frontend/react/src/modules/TrainingModule.jsx`
+- backend: `app/training_jobs.py`, `app/main.py`, `app/persistence.py`
+
+### 4) Model Comparison
+
+- compares:
+  - rule-based baseline policy
+  - trained RL checkpoint
+  - optional LLM simulation mode
+- multi-seed configuration support (5–10)
+- history load/clear support
+- legacy comparison snapshot repair path:
+  - old score-only history can be repaired to include run-level rows
+- frontend: `frontend/react/src/modules/ComparisonModule.jsx`
+- backend: `app/main.py`, `app/persistence.py`, `app/simulator.py`
 
 ## Action and Observation Spaces
-### API Action Space (typed)
-`ActionModel` supports:
+
+### API Action Space (`ActionModel`)
+
 - `set_priority_mode`
 - `assign_capacity`
 - `request_missing_documents`
@@ -105,219 +153,131 @@ Graders in `app/graders.py`:
 - `advance_time`
 - `reallocate_officers`
 
-### API Observation Space (typed)
-`ObservationModel` includes:
-- day/max_day
+### API Observation Space (`ObservationModel`)
+
+- day, max days
 - priority mode
 - officer allocations + reserve
-- per-service queue snapshots (active, urgent, missing docs, breached, age)
-- totals (backlog/completed/SLA breaches/fairness)
+- per-service queue snapshots
+- backlog/completed/SLA/fairness totals
 - escalation budget remaining
-- last action validity/error context
+- last action validity/message
 
-### RL Wrapper Spaces
-- Discrete action space: 28 actions (kept intentionally)
-- Flattened observation vector: 84 float features
-- Action masking implemented
+### RL Wrapper Space
+
+- Discrete 28 actions (intentionally retained)
+- flat feature vector from engineered observations
+- action masking enabled
 
 Files:
+
 - `rl/feature_builder.py`
 - `rl/action_mask.py`
 - `rl/gym_wrapper.py`
 
 ## Reward Design
-Implemented in `app/reward.py`.
 
-Positive components:
-- progress reward
-- completion reward
+Implemented in `app/reward.py` with dense trajectory signal:
 
-Penalty components:
-- waiting/backlog pressure
-- SLA breaches
-- fairness excess
-- invalid actions
-- idle capacity
+- positive: progress + completion
+- penalties: waiting, SLA, fairness, invalid actions, idle capacity
 
-This gives trajectory-level signal, not just terminal binary reward.
+## Baseline and Inference Programs
 
-## RL Training Status
-### Phase 1
-- Maskable PPO on easy task
+### `baseline_openai.py`
 
-### Phase 2
-- Curriculum PPO across easy/medium/hard
-- Current best practical checkpoint family in this repo
+- CLI baseline/LLM runner (OpenAI-compatible + NVIDIA fallback support)
 
-### Phase 3
-- Recurrent PPO implemented
-- Currently underperforming vs Phase 2 in observed runs
-- Expansion paused for now per project decision
+### `inference.py`
 
-Useful commands:
-```bash
-python -m rl.train_ppo --phase 1 --timesteps 200000 --n-envs 4 --seed 42
-python -m rl.train_ppo --phase 2 --timesteps 500000 --n-envs 4 --seed 42 --phase2-config rl/configs/curriculum.yaml
-python -m rl.evaluate --model results/best_model/phase2_final.zip --episodes 3 --model-type maskable
-```
-
-## Baseline and Inference Runners
-### baseline_openai.py
-Purpose:
-- CLI baseline runner for heuristic/LLM policy execution.
-- Supports OpenAI-compatible and NVIDIA-style routing/fallback behavior.
-
-Example:
-```bash
-python baseline_openai.py --agent heuristic --task all --verbose
-python baseline_openai.py --agent llm --task district_backlog_easy --verbose
-```
-
-### inference.py
-Purpose:
-- Submission-style inference runner with strict stdout format:
+- submission-style inference script
+- emits strict structured logs:
   - `[START]`
   - `[STEP]`
   - `[END]`
 
-Example:
-```bash
-python inference.py
+## Repository Layout
+
+```text
+app/
+  main.py              FastAPI API + route contracts
+  env.py               GovWorkflowEnv kernel
+  models.py            Typed schemas
+  tasks.py             Task configs
+  reward.py            Reward shaping
+  graders.py           Deterministic graders
+  simulator.py         Baseline/LLM/trained simulation runtime
+  training_jobs.py     Background RL training manager
+  persistence.py       SQLite/filesystem persistence
+  baselines.py         Rule-based baseline policies
+rl/
+  feature_builder.py   RL feature engineering
+  action_mask.py       Action validity mask
+  gym_wrapper.py       Gym wrapper for RL algorithms
+  train_ppo.py         Phase training entrypoint
+  evaluate.py          Checkpoint evaluator
+frontend/react/
+  src/
+    modules/           Overview, Simulation, Training, Comparison
+    components/        Layout + charts
+openenv.yaml           OpenEnv manifest
+baseline_openai.py     Baseline/LLM CLI runner
+inference.py           Submission runner
+Dockerfile             Deployment image
 ```
 
-Environment variables expected by inference flow:
-- `API_BASE_URL`
-- `MODEL_NAME`
-- `HF_TOKEN` (or compatible key)
-- fallback-compatible: `OPENAI_API_KEY`, `API_KEY`, `NVIDIA_API_KEY`, `NVIDIA_API_KEY_2`
+## Local Setup
 
-## Frontend Modules
-- Overview
-- Simulation Lab
-- Training Studio
-- Model Comparison
+### Prerequisites
 
-Design direction:
-- backend-driven workflows through FastAPI APIs
-- minimal required user inputs
-- dynamic logs, metrics, and run summaries
-
-## Persistence and Progress Retention
-Implemented in `app/persistence.py`.
-
-Stores:
-- simulation history
-- comparison history
-- training jobs metadata
-- training artifacts
-
-Runtime controls:
-- `STORAGE_ENABLED=true`
-- `OPENENV_DATA_DIR=/data/openenv_rl` (recommended for deployment)
-
-Important:
-- persistence survives refresh/restart only if runtime disk is persistent (for example mounted `/data` volume).
-
-## Local Development Setup
-## Prerequisites
 - Python 3.11+
 - Node 20+
-- Docker Desktop (for container run)
+- Docker Desktop
 
-## Install dependencies
+### Install
+
 ```bash
 pip install -r requirements.txt
 pip install -r requirements_rl.txt
 npm --prefix frontend/react install
 ```
 
-## Configure environment
+### Environment
+
 ```bash
 copy .env.example .env
 ```
 
-Fill key fields as needed (`NVIDIA_API_KEY`, `HF_TOKEN`, etc).
+Fill required keys depending on chosen provider:
 
-## Run locally (backend + built UI)
-```bash
-npm --prefix frontend/react run build
-python scripts/run_local.py --host 0.0.0.0 --port 7860
-```
+- `API_BASE_URL`
+- `MODEL_NAME`
+- `HF_TOKEN` or `OPENAI_API_KEY`/`API_KEY`
+- optional NVIDIA keys:
+  - `NVIDIA_API_KEY`
+  - `NVIDIA_API_KEY_2`
 
-Open:
-- UI: `http://127.0.0.1:7860/ui`
-- Docs: `http://127.0.0.1:7860/docs`
+### Run (recommended)
 
-## Run split dev mode (for frontend edits)
 Terminal 1:
+
 ```bash
 python scripts/run_local.py --host 127.0.0.1 --port 7860 --reload
 ```
 
 Terminal 2:
+
 ```bash
 npm --prefix frontend/react run dev
 ```
 
 Open:
+
 - UI: `http://127.0.0.1:5173/ui`
+- API docs: `http://127.0.0.1:7860/docs`
 
-## Docker Build and Run (Verified)
-## Build image
-```bash
-docker build -t openenv-rl:local .
-```
+## Local Validation and Test Commands
 
-## Run container
-```bash
-docker rm -f openenv-rl-test 2>nul
-docker run -d --name openenv-rl-test -p 7860:7860 --env-file .env openenv-rl:local
-```
-
-Open:
-- UI: `http://127.0.0.1:7860/ui`
-- Docs: `http://127.0.0.1:7860/docs`
-- Health: `http://127.0.0.1:7860/health`
-
-## Optional persistent volume for local Docker
-```bash
-docker rm -f openenv-rl-test 2>nul
-docker run -d --name openenv-rl-test \
-  -p 7860:7860 \
-  --env-file .env \
-  -e STORAGE_ENABLED=true \
-  -e OPENENV_DATA_DIR=/data/openenv_rl \
-  -v %cd%/data:/data \
-  openenv-rl:local
-```
-
-## Hugging Face Docker Deployment
-1. Create Space with SDK = Docker.
-2. Keep app port at `7860`.
-3. Add Secrets/Variables:
-   - `API_BASE_URL`
-   - `MODEL_NAME`
-   - `HF_TOKEN` (or alternate provider keys)
-   - `STORAGE_ENABLED=true`
-   - `OPENENV_DATA_DIR=/data/openenv_rl`
-4. Enable persistent storage in Space settings.
-5. Push repository (with `Dockerfile` at root).
-
-## API Quick Smoke Tests
-```bash
-curl http://127.0.0.1:7860/health
-curl http://127.0.0.1:7860/api/tasks
-curl http://127.0.0.1:7860/api/agents
-```
-
-Simulation run test:
-```bash
-curl -X POST http://127.0.0.1:7860/api/simulation/run \
-  -H "Content-Type: application/json" \
-  -d "{\"task_id\":\"district_backlog_easy\",\"agent_mode\":\"baseline_policy\",\"policy_name\":\"backlog_clearance\",\"max_steps\":20,\"seed\":42}"
-```
-
-## Validation and Tests
 ```bash
 openenv validate
 python -m pytest tests/test_api.py -q
@@ -325,36 +285,61 @@ python -m pytest tests/test_gym_wrapper.py tests/test_action_mask.py tests/test_
 python -m pytest tests/test_persistence_history.py tests/test_simulator_guardrails.py -q
 ```
 
-## Known Operational Notes
-- If UI shows old JS bundle errors after updates, rebuild image and hard refresh browser.
-- If history disappears after restart, ensure persistent storage is mounted and `OPENENV_DATA_DIR` points to that mount.
-- For local no-key mode, simulation falls back to heuristic policy.
+## Docker Build and End-to-End Run
 
-## Key Directories
-```text
-app/
-  main.py              FastAPI app and API routes
-  env.py               GovWorkflowEnv kernel
-  models.py            Typed schemas
-  tasks.py             Task definitions
-  graders.py           Deterministic graders
-  reward.py            Reward shaping
-  simulator.py         Simulation bridge (baseline/llm/trained)
-  training_jobs.py     Background RL training jobs
-  persistence.py       SQLite + artifact persistence
-rl/
-  feature_builder.py   RL feature engineering
-  action_mask.py       Action mask logic
-  gym_wrapper.py       Gymnasium wrapper
-  train_ppo.py         PPO training
-  evaluate.py          RL evaluation
-frontend/react/
-  src/                 React modules and components
-openenv.yaml           OpenEnv manifest
-inference.py           Submission-style inference runner
-baseline_openai.py     Baseline runner
-Dockerfile             Deployment image
+### Build image
+
+```bash
+docker build -t openenv-rl:local .
 ```
 
+### Run container
+
+```bash
+docker rm -f openenv-rl-test 2>nul
+docker run -d --name openenv-rl-test -p 7860:7860 --env-file .env openenv-rl:local
+```
+
+Open:
+
+- UI: `http://127.0.0.1:7860/ui`
+- Health: `http://127.0.0.1:7860/health`
+- Docs: `http://127.0.0.1:7860/docs`
+
+### Run with persistent volume (recommended)
+
+```bash
+docker rm -f openenv-rl-test 2>nul
+docker run -d --name openenv-rl-test ^
+  -p 7860:7860 ^
+  --env-file .env ^
+  -e STORAGE_ENABLED=true ^
+  -e OPENENV_DATA_DIR=/data/openenv_rl ^
+  -v %cd%/data:/data ^
+  openenv-rl:local
+```
+
+## Hugging Face Spaces (Docker SDK)
+
+This README includes the required Spaces YAML metadata header at top.
+
+Deployment checklist:
+
+1. Create Space with `SDK = Docker`.
+2. Push repository with root `Dockerfile`.
+3. Add required Secrets/Variables:
+   - `API_BASE_URL`
+   - `MODEL_NAME`
+   - `HF_TOKEN` (or provider keys)
+   - `STORAGE_ENABLED=true`
+   - `OPENENV_DATA_DIR=/data/openenv_rl`
+4. Enable persistent storage on Space.
+5. Verify:
+   - `/health` returns 200
+   - `/reset` works
+   - `openenv validate` passes
+
 ## License
+
 BSD-3-Clause.
+

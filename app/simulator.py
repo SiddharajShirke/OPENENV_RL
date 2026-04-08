@@ -84,6 +84,14 @@ def _extract_json_object(text: str) -> dict[str, Any] | None:
 def _coerce_action(payload: dict[str, Any] | None) -> ActionModel:
     if not payload:
         return ActionModel(action_type=ActionType.ADVANCE_TIME)
+
+
+def _recommended_min_steps(task_id: str) -> int:
+    if task_id == "cross_department_hard":
+        return 70
+    if task_id == "mixed_urgency_medium":
+        return 60
+    return 40
     try:
         return ActionModel(**payload)
     except Exception:
@@ -143,11 +151,85 @@ def _service_with_officers(obs: ObservationModel) -> ServiceType | None:
     return None
 
 
+def _compute_action_mask(obs: ObservationModel) -> dict[ActionType, bool]:
+    has_reserve = int(obs.officer_pool.reserve_officers) > 0
+    has_missing = any(q.missing_docs_cases > 0 for q in obs.queue_snapshots)
+    has_backlog = any(q.active_cases > 0 for q in obs.queue_snapshots)
+    has_budget = int(obs.escalation_budget_remaining) > 0
+    staffed_services = [q.service for q in obs.queue_snapshots if _alloc_for(obs, q.service) > 0]
+    can_reallocate = len(staffed_services) >= 1 and len(obs.queue_snapshots) >= 2
+    return {
+        ActionType.SET_PRIORITY_MODE: True,
+        ActionType.ADVANCE_TIME: True,
+        ActionType.ASSIGN_CAPACITY: has_reserve and has_backlog,
+        ActionType.REQUEST_MISSING_DOCUMENTS: has_missing,
+        ActionType.ESCALATE_SERVICE: has_budget and has_backlog,
+        ActionType.REALLOCATE_OFFICERS: can_reallocate,
+    }
+
+
+def _masked_action_type_hints(obs: ObservationModel) -> tuple[list[str], list[str]]:
+    mask = _compute_action_mask(obs)
+    allowed = [k.value for k, ok in mask.items() if ok]
+    blocked = [k.value for k, ok in mask.items() if not ok]
+    return allowed, blocked
+
+
+def _best_high_impact_action(obs: ObservationModel) -> tuple[ActionModel, str]:
+    top_backlog = _top_backlog_service(obs)
+    top_missing = _service_with_missing_docs(obs)
+
+    if int(obs.officer_pool.reserve_officers) > 0 and top_backlog is not None:
+        return (
+            ActionModel(action_type=ActionType.ASSIGN_CAPACITY, service=top_backlog, officer_delta=1),
+            "high-impact: assign reserve capacity to top backlog service",
+        )
+
+    if top_missing is not None:
+        return (
+            ActionModel(action_type=ActionType.REQUEST_MISSING_DOCUMENTS, service=top_missing),
+            "high-impact: clear missing-document bottleneck",
+        )
+
+    if int(obs.escalation_budget_remaining) > 0:
+        hot = sorted(
+            obs.queue_snapshots,
+            key=lambda q: (q.breached_cases, q.active_cases, q.urgent_cases),
+            reverse=True,
+        )
+        if hot and (hot[0].breached_cases > 0 or hot[0].active_cases > 0):
+            return (
+                ActionModel(action_type=ActionType.ESCALATE_SERVICE, service=hot[0].service),
+                "high-impact: escalate highest SLA-risk service",
+            )
+
+    source = _service_with_officers(obs)
+    if source is not None and _alloc_for(obs, source) > 0:
+        target = _top_backlog_service(obs, exclude=source)
+        if target is not None and target != source:
+            return (
+                ActionModel(
+                    action_type=ActionType.REALLOCATE_OFFICERS,
+                    service=source,
+                    target_service=target,
+                    officer_delta=1,
+                ),
+                "high-impact: reallocate one officer toward highest backlog",
+            )
+
+    return ActionModel(action_type=ActionType.ADVANCE_TIME), "fallback: no high-impact action available"
+
+
 def _repair_action_for_observation(
     action: ActionModel,
     obs: ObservationModel,
 ) -> tuple[ActionModel, str | None]:
+    mask = _compute_action_mask(obs)
     at = action.action_type
+
+    if not bool(mask.get(at, True)):
+        fallback, why = _best_high_impact_action(obs)
+        return fallback, f"masked {at.value}; {why}"
 
     if at == ActionType.ADVANCE_TIME:
         return action, None
@@ -163,10 +245,12 @@ def _repair_action_for_observation(
     if at == ActionType.ASSIGN_CAPACITY:
         reserve = int(obs.officer_pool.reserve_officers)
         if reserve <= 0:
-            return ActionModel(action_type=ActionType.ADVANCE_TIME), "reserve officers exhausted, switched to advance_time"
+            fallback, why = _best_high_impact_action(obs)
+            return fallback, f"reserve officers exhausted; {why}"
         service = action.service or _top_backlog_service(obs)
         if service is None:
-            return ActionModel(action_type=ActionType.ADVANCE_TIME), "no service available for assign_capacity"
+            fallback, why = _best_high_impact_action(obs)
+            return fallback, f"no service available for assign_capacity; {why}"
         delta = int(action.officer_delta) if int(action.officer_delta) > 0 else 1
         delta = min(delta, reserve)
         repaired = ActionModel(
@@ -180,7 +264,8 @@ def _repair_action_for_observation(
     if at == ActionType.REQUEST_MISSING_DOCUMENTS:
         service = action.service or _service_with_missing_docs(obs)
         if service is None:
-            return ActionModel(action_type=ActionType.ADVANCE_TIME), "no missing-doc queue available, switched to advance_time"
+            fallback, why = _best_high_impact_action(obs)
+            return fallback, f"no missing-doc queue available; {why}"
         repaired = ActionModel(
             action_type=ActionType.REQUEST_MISSING_DOCUMENTS,
             service=service,
@@ -190,10 +275,12 @@ def _repair_action_for_observation(
 
     if at == ActionType.ESCALATE_SERVICE:
         if int(obs.escalation_budget_remaining) <= 0:
-            return ActionModel(action_type=ActionType.ADVANCE_TIME), "escalation budget exhausted, switched to advance_time"
+            fallback, why = _best_high_impact_action(obs)
+            return fallback, f"escalation budget exhausted; {why}"
         service = action.service or _top_backlog_service(obs)
         if service is None and action.case_id is None:
-            return ActionModel(action_type=ActionType.ADVANCE_TIME), "no escalation target available, switched to advance_time"
+            fallback, why = _best_high_impact_action(obs)
+            return fallback, f"no escalation target available; {why}"
         repaired = ActionModel(
             action_type=ActionType.ESCALATE_SERVICE,
             service=service,
@@ -205,19 +292,22 @@ def _repair_action_for_observation(
     if at == ActionType.REALLOCATE_OFFICERS:
         source = action.service or _service_with_officers(obs)
         if source is None:
-            return ActionModel(action_type=ActionType.ADVANCE_TIME), "no staffed source service, switched to advance_time"
+            fallback, why = _best_high_impact_action(obs)
+            return fallback, f"no staffed source service; {why}"
         source_alloc = _alloc_for(obs, source)
         if source_alloc <= 0:
             source = _service_with_officers(obs)
             source_alloc = _alloc_for(obs, source) if source is not None else 0
         if source is None or source_alloc <= 0:
-            return ActionModel(action_type=ActionType.ADVANCE_TIME), "insufficient source officers, switched to advance_time"
+            fallback, why = _best_high_impact_action(obs)
+            return fallback, f"insufficient source officers; {why}"
 
         target = action.target_service
         if target is None or target == source:
             target = _top_backlog_service(obs, exclude=source)
         if target is None or target == source:
-            return ActionModel(action_type=ActionType.ADVANCE_TIME), "missing distinct target_service, switched to advance_time"
+            fallback, why = _best_high_impact_action(obs)
+            return fallback, f"missing distinct target_service; {why}"
 
         delta = int(action.officer_delta) if int(action.officer_delta) > 0 else 1
         delta = max(1, min(delta, source_alloc))
@@ -248,10 +338,11 @@ def _log_step_line(step_row: dict[str, Any]) -> str:
     source = step_row.get("decision_source") or "unknown"
     model = step_row.get("model_used") or "null"
     repair = step_row.get("repair_note") or "null"
+    switch_note = step_row.get("switch_note") or "null"
     return (
         f"[STEP] step={step_row.get('step', 0)} action={action} "
         f"reward={float(step_row.get('reward', 0.0)):.2f} done={done} "
-        f"error={error} source={source} model={model} repair={repair}"
+        f"error={error} source={source} model={model} repair={repair} switch={switch_note}"
     )
 
 
@@ -269,7 +360,11 @@ class LiveSimulationSession:
     ) -> None:
         self.task_id = task_id
         self.agent_mode = agent_mode
-        self.max_steps = max_steps
+        recommended = _recommended_min_steps(task_id)
+        if agent_mode == "llm_inference":
+            self.max_steps = max(int(max_steps), int(recommended))
+        else:
+            self.max_steps = int(max_steps)
         self.seed = int(seed if seed is not None else random.randint(1, 999999))
         self.policy_name = policy_name or "backlog_clearance"
         self.model_path = model_path
@@ -293,6 +388,11 @@ class LiveSimulationSession:
 
         self.llm_runtimes: list[dict[str, Any]] = []
         self.llm_route: list[str] = []
+        self.llm_model_stats: dict[tuple[str, str], dict[str, Any]] = {}
+        self.consecutive_failure_steps = 0
+        self.recovery_steps_remaining = 0
+        self.auto_switch_count = 0
+        self.last_switch_reason: str | None = None
 
         if self.agent_mode == "trained_rl":
             self._init_trained()
@@ -383,6 +483,17 @@ class LiveSimulationSession:
                 )
 
         self.llm_runtimes = runtimes
+        self.llm_model_stats = {}
+        for runtime in runtimes:
+            provider = str(runtime.get("provider"))
+            for model in runtime.get("models", []):
+                self.llm_model_stats[(provider, str(model))] = {
+                    "calls": 0,
+                    "invalid": 0,
+                    "repaired": 0,
+                    "failures": 0,
+                    "cooldown_until_step": 0,
+                }
 
         openai_runtime = next((rt for rt in runtimes if rt.get("provider") == "openai-compatible"), None)
         nvidia_runtime = next((rt for rt in runtimes if rt.get("provider") == "nvidia"), None)
@@ -406,12 +517,52 @@ class LiveSimulationSession:
         self.llm_route = [
             openai_route,
             nvidia_route,
+            "adaptive ranking: prefer models with lower invalid/repaired rates",
             "heuristic fallback (backlog_clearance_policy)",
         ]
 
+    def _rank_runtime_models(self, provider: str, models: list[str]) -> list[str]:
+        def _score(model_name: str) -> tuple[float, int]:
+            stat = self.llm_model_stats.get((provider, model_name), {})
+            calls = max(1, int(stat.get("calls", 0)))
+            invalid_rate = float(stat.get("invalid", 0)) / calls
+            repaired_rate = float(stat.get("repaired", 0)) / calls
+            fail_rate = float(stat.get("failures", 0)) / calls
+            cooldown = int(stat.get("cooldown_until_step", 0))
+            cooldown_penalty = 1.0 if self.step_idx < cooldown else 0.0
+            return (invalid_rate * 2.0 + repaired_rate * 1.25 + fail_rate * 1.5 + cooldown_penalty, -calls)
+
+        return sorted([str(m) for m in models], key=_score)
+
     def _llm_action_with_meta(self, obs: ObservationModel) -> tuple[ActionModel, dict[str, Any]]:
+        if self.recovery_steps_remaining > 0:
+            self.recovery_steps_remaining -= 1
+            action, why = _best_high_impact_action(obs)
+            return action, {
+                "decision_source": "auto_recovery_policy",
+                "provider": "heuristic",
+                "model_used": "backlog_clearance_policy",
+                "llm_attempts": 0,
+                "llm_error": None,
+                "llm_key_label": None,
+                "repair_note": why,
+            }
+
         attempts = 0
         last_error = ""
+        allowed_actions, blocked_actions = _masked_action_type_hints(obs)
+        schema_hint = {
+            "required_fields": {
+                "set_priority_mode": ["action_type", "priority_mode"],
+                "assign_capacity": ["action_type", "service", "officer_delta"],
+                "request_missing_documents": ["action_type", "service"],
+                "escalate_service": ["action_type", "service"],
+                "advance_time": ["action_type"],
+                "reallocate_officers": ["action_type", "service", "target_service", "officer_delta"],
+            },
+            "allowed_priority_mode": [m.value for m in PriorityMode],
+            "allowed_services": [s.value for s in ServiceType],
+        }
         system_prompt = (
             "You are controlling a government workflow simulator. "
             "Return exactly one JSON object only. No markdown. No explanation. "
@@ -422,20 +573,27 @@ class LiveSimulationSession:
             "2) assign_capacity requires service + officer_delta>0. "
             "3) request_missing_documents requires service with missing_docs_cases>0. "
             "4) set_priority_mode requires priority_mode in [urgent_first, oldest_first, balanced, backlog_clearance]. "
+            "5) Always prefer high-impact actions that reduce backlog/SLA risk over no-op loops. "
             "Use lowercase enum values."
         )
         user_prompt = (
             "Observation:\n"
             f"{obs.model_dump_json()}\n"
+            f"Allowed action types now: {allowed_actions}\n"
+            f"Blocked action types now: {blocked_actions}\n"
+            f"Action schema hints: {json.dumps(schema_hint, separators=(',', ':'))}\n"
             f"Last action validity: {obs.last_action_valid}\n"
             f"Last action message: {obs.last_action_message}\n"
             "Return action JSON."
         )
 
         for runtime in self.llm_runtimes:
+            provider = str(runtime["provider"])
+            ranked_models = self._rank_runtime_models(provider, list(runtime["models"]))
             for client, key_label in runtime["clients"]:
-                for model in runtime["models"]:
+                for model in ranked_models:
                     attempts += 1
+                    stat_key = (provider, model)
                     try:
                         out = client.chat.completions.create(
                             model=model,
@@ -449,9 +607,11 @@ class LiveSimulationSession:
                         )
                         content = (out.choices[0].message.content or "").strip()
                         action = _coerce_action(_extract_json_object(content))
+                        if stat_key in self.llm_model_stats:
+                            self.llm_model_stats[stat_key]["calls"] += 1
                         return action, {
                             "decision_source": "llm",
-                            "provider": runtime["provider"],
+                            "provider": provider,
                             "model_used": model,
                             "llm_attempts": attempts,
                             "llm_error": None,
@@ -459,9 +619,15 @@ class LiveSimulationSession:
                         }
                     except Exception as exc:
                         last_error = str(exc)
+                        stat = self.llm_model_stats.get(stat_key)
+                        if stat is not None:
+                            stat["calls"] += 1
+                            stat["failures"] += 1
+                            if stat["failures"] >= 2:
+                                stat["cooldown_until_step"] = self.step_idx + 5
                         continue
 
-        action = backlog_clearance_policy(obs)
+        action, why = _best_high_impact_action(obs)
         if not self.llm_runtimes:
             last_error = "No LLM credentials configured."
         return action, {
@@ -471,6 +637,7 @@ class LiveSimulationSession:
             "llm_attempts": attempts,
             "llm_error": last_error or None,
             "llm_key_label": None,
+            "repair_note": why,
         }
 
     def _init_trained(self) -> None:
@@ -558,7 +725,26 @@ class LiveSimulationSession:
                 "llm_key_label": None,
             }
         else:
-            action, meta = self.policy(self.obs)
+            raw_decision = self.policy(self.obs)
+            if isinstance(raw_decision, tuple) and len(raw_decision) == 2:
+                action, meta = raw_decision
+            else:
+                action, meta = raw_decision, {}
+            if not isinstance(meta, dict):
+                meta = {}
+            if not isinstance(action, ActionModel):
+                if isinstance(action, dict):
+                    action = _coerce_action(action)
+                else:
+                    action = ActionModel(action_type=ActionType.ADVANCE_TIME)
+                    meta["repair_note"] = "non-action output from llm policy, coerced to advance_time"
+            allowed_mask = _compute_action_mask(self.obs)
+            if not bool(allowed_mask.get(action.action_type, True)):
+                masked_fallback, why = _best_high_impact_action(self.obs)
+                action = masked_fallback
+                if meta.get("decision_source") == "llm":
+                    meta["decision_source"] = "llm_repaired"
+                meta["repair_note"] = f"action masked at runtime; {why}"
             repaired_action, repair_note = _repair_action_for_observation(action, self.obs)
             if repair_note:
                 action = repaired_action
@@ -585,6 +771,38 @@ class LiveSimulationSession:
             "queue_rows": _queue_rows(self.obs),
         }
         row.update(meta)
+
+        if self.agent_mode == "llm_inference":
+            is_repaired = row.get("decision_source") in {"llm_repaired", "auto_recovery_policy"}
+            is_invalid = bool(row.get("invalid_action")) or bool(row.get("last_action_error"))
+            model_used = str(row.get("model_used") or "")
+            provider = str(row.get("provider") or "")
+            stat_key = (provider, model_used)
+            stat = self.llm_model_stats.get(stat_key)
+            if stat is not None:
+                if is_repaired:
+                    stat["repaired"] += 1
+                if is_invalid:
+                    stat["invalid"] += 1
+                    stat["failures"] += 1
+                else:
+                    stat["failures"] = max(0, int(stat.get("failures", 0)) - 1)
+
+            is_failure_pattern = is_invalid or is_repaired
+            if is_failure_pattern:
+                self.consecutive_failure_steps += 1
+            else:
+                self.consecutive_failure_steps = 0
+
+            if self.consecutive_failure_steps >= 4:
+                if stat is not None:
+                    stat["cooldown_until_step"] = self.step_idx + 6
+                self.recovery_steps_remaining = max(self.recovery_steps_remaining, 3)
+                self.auto_switch_count += 1
+                self.last_switch_reason = "repeated invalid/repaired pattern detected"
+                row["switch_note"] = "auto-switched to recovery policy and deprioritized failing model"
+                self.consecutive_failure_steps = 0
+
         return row
 
     def _step_trained(self) -> dict[str, Any]:
@@ -657,8 +875,37 @@ class LiveSimulationSession:
         llm_steps = sum(
             1 for row in self.trace if row.get("decision_source") in {"llm", "llm_repaired"}
         )
-        fallback_steps = sum(1 for row in self.trace if row.get("decision_source") == "heuristic_fallback")
-        repaired_steps = sum(1 for row in self.trace if row.get("decision_source") == "llm_repaired")
+        fallback_steps = sum(
+            1
+            for row in self.trace
+            if row.get("decision_source") in {"heuristic_fallback", "auto_recovery_policy"}
+        )
+        repaired_steps = sum(
+            1
+            for row in self.trace
+            if row.get("decision_source") in {"llm_repaired", "auto_recovery_policy"}
+        )
+        total_steps = max(1, len(self.trace))
+        invalid_actions = int(final_state.metrics.total_invalid_actions)
+        invalid_rate = float(invalid_actions) / float(total_steps)
+        repaired_rate = float(repaired_steps) / float(total_steps)
+
+        ranked_models: list[dict[str, Any]] = []
+        if self.llm_model_stats:
+            for (provider, model), stat in self.llm_model_stats.items():
+                calls = int(stat.get("calls", 0))
+                if calls <= 0:
+                    continue
+                ranked_models.append(
+                    {
+                        "provider": provider,
+                        "model": model,
+                        "calls": calls,
+                        "invalid_rate": float(stat.get("invalid", 0)) / max(1, calls),
+                        "repaired_rate": float(stat.get("repaired", 0)) / max(1, calls),
+                    }
+                )
+            ranked_models.sort(key=lambda x: (x["invalid_rate"], x["repaired_rate"], -x["calls"]))
 
         self.summary = {
             "total_steps": final_state.total_steps,
@@ -667,12 +914,19 @@ class LiveSimulationSession:
             "total_sla_breaches": final_state.total_sla_breaches,
             "fairness_gap": float(final_state.fairness_gap),
             "total_invalid_actions": final_state.metrics.total_invalid_actions,
+            "invalid_action_rate": invalid_rate,
             "llm_steps": llm_steps,
             "heuristic_fallback_steps": fallback_steps,
             "llm_repaired_steps": repaired_steps,
+            "repaired_action_rate": repaired_rate,
+            "auto_switch_count": self.auto_switch_count,
+            "last_switch_reason": self.last_switch_reason,
+            "effective_max_steps": self.max_steps,
+            "recommended_min_steps": _recommended_min_steps(self.task_id),
         }
         if self.agent_mode == "llm_inference":
             self.summary["llm_route"] = list(self.llm_route)
+            self.summary["llm_model_performance"] = ranked_models
         if self.agent_mode == "trained_rl":
             self.summary["model_path"] = self.model_path
             self.summary["model_type"] = self.model_type

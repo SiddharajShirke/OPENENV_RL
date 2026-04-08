@@ -61,11 +61,12 @@ export default function App() {
     boot();
   }, []);
 
-  const handleModelReady = useCallback((path, type) => {
+  const handleModelReady = useCallback((path, type, outputModelName = null) => {
     if (!path) return;
     const modelType = type || "maskable";
     const fileName = path.split("\\").pop() || path.split("/").pop();
-    const label = `New Training Run (${fileName})`;
+    const shownName = outputModelName || fileName;
+    const label = `New Training Run (${shownName})`;
 
     setCustomModels((prev) => {
       const exists = prev.some((m) => m.path === path);

@@ -389,3 +389,36 @@ async def test_api_workflow_run_inference_returns_output_fields() -> None:
     assert "exit_code" in data
     assert "stdout" in data
     assert "stderr" in data
+
+
+async def test_api_openenv_compliance_endpoint_returns_items() -> None:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url=BASE) as c:
+        r = await c.get("/api/openenv/compliance")
+    assert r.status_code == 200
+    data = r.json()
+    assert "items" in data
+    assert isinstance(data["items"], list)
+    keys = {item["key"] for item in data["items"]}
+    assert "api_step_reset_state" in keys
+    assert "openenv_yaml" in keys
+
+
+async def test_api_simulation_live_step_flow_runs_without_500() -> None:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url=BASE) as c:
+        start = await c.post(
+            "/api/simulation/live/start",
+            json={
+                "task_id": "district_backlog_easy",
+                "agent_mode": "llm_inference",
+                "max_steps": 10,
+                "seed": 11,
+            },
+        )
+        assert start.status_code == 200
+        run_id = start.json()["run_id"]
+        step = await c.post("/api/simulation/live/step", json={"run_id": run_id})
+    assert step.status_code == 200
+    payload = step.json()
+    assert "run_id" in payload
+    assert "total_reward" in payload
+    assert isinstance(payload["done"], bool)

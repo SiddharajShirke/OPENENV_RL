@@ -7,7 +7,35 @@ function normalizeNumber(value, fallback = 0) {
   return Number.isFinite(n) ? n : fallback;
 }
 
-function normalizeResultShape(result) {
+function synthesizeRunsFromSummary({
+  runCount,
+  seedBase,
+  score,
+  includeLlm = false,
+}) {
+  const count = Math.max(1, Number(runCount || 1));
+  const baseSeed = Number(seedBase || 0);
+  const rows = [];
+  for (let i = 0; i < count; i += 1) {
+    rows.push({
+      run_index: i + 1,
+      seed: baseSeed + i,
+      score,
+      reward_sum: null,
+      completed: null,
+      backlog: null,
+      llm_steps: includeLlm ? null : undefined,
+      heuristic_fallback_steps: includeLlm ? null : undefined,
+      invalid_action_rate: includeLlm ? null : undefined,
+      repaired_action_rate: includeLlm ? null : undefined,
+      auto_switch_count: includeLlm ? null : undefined,
+      _legacySynthetic: true,
+    });
+  }
+  return rows;
+}
+
+function normalizeResultShape(result, historyMeta = {}) {
   if (!result || typeof result !== "object") {
     return {
       baselineScore: 0,
@@ -27,8 +55,26 @@ function normalizeResultShape(result) {
     result.llmScore == null || Number.isNaN(Number(result.llmScore))
       ? null
       : Number(result.llmScore);
-  const baselineRuns = Array.isArray(result.baselineRuns) ? result.baselineRuns : [];
-  const llmRuns = Array.isArray(result.llmRuns) ? result.llmRuns : [];
+  const runCount = Number(historyMeta?.runs || 1);
+  const seedBase = Number(historyMeta?.seed_base || 0);
+
+  const baselineRuns = Array.isArray(result.baselineRuns)
+    ? result.baselineRuns
+    : synthesizeRunsFromSummary({
+        runCount,
+        seedBase,
+        score: baselineScore,
+      });
+  const llmRuns = Array.isArray(result.llmRuns)
+    ? result.llmRuns
+    : llmScore == null
+      ? []
+      : synthesizeRunsFromSummary({
+          runCount,
+          seedBase,
+          score: llmScore,
+          includeLlm: true,
+        });
 
   return {
     baselineScore,
@@ -47,6 +93,8 @@ function normalizeResultShape(result) {
         : normalizeNumber(result.deltaLlmVsBaseline, llmScore == null ? 0 : llmScore - baselineScore),
     baselineRuns,
     llmRuns,
+    legacySnapshotWithoutRunRows:
+      !Array.isArray(result.baselineRuns) || (llmScore != null && !Array.isArray(result.llmRuns)),
   };
 }
 
@@ -55,12 +103,14 @@ export function ComparisonModule({ tasks, agents, modelOptions, onStatus, defaul
   const [policyName, setPolicyName] = useState("backlog_clearance");
   const [modelPath, setModelPath] = useState(modelOptions[0]?.path || "");
   const [modelType, setModelType] = useState(modelOptions[0]?.model_type || "maskable");
-  const [runs, setRuns] = useState(3);
+  const [runs, setRuns] = useState(5);
   const [steps, setSteps] = useState(80);
-  const [episodes, setEpisodes] = useState(3);
+  const [episodes, setEpisodes] = useState(5);
   const [seedBase, setSeedBase] = useState(100);
   const [includeLlm, setIncludeLlm] = useState(true);
+  const [autoSelectBestModel, setAutoSelectBestModel] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [progressNote, setProgressNote] = useState("");
   const [result, setResult] = useState(null);
   const [historyRows, setHistoryRows] = useState([]);
 
@@ -80,15 +130,31 @@ export function ComparisonModule({ tasks, agents, modelOptions, onStatus, defaul
     }
   };
 
+  const clearComparisonHistory = async () => {
+    try {
+      const res = await api("/history/comparisons", { method: "DELETE" });
+      setHistoryRows([]);
+      onStatus(`Comparison history cleared (${res.deleted_rows || 0}).`);
+    } catch (err) {
+      onStatus(err.message);
+    }
+  };
+
   useEffect(() => {
     refreshHistory();
   }, []);
+
+  useEffect(() => {
+    if (taskId === "cross_department_hard" && Number(steps) < 70) setSteps(70);
+    if (taskId === "mixed_urgency_medium" && Number(steps) < 60) setSteps(60);
+  }, [taskId, steps]);
 
   const runLlmBatch = async ({ task, runCount, maxSteps, seedStart }) => {
     const rows = [];
     for (let i = 0; i < runCount; i += 1) {
       const seed = Number(seedStart) + i;
       onStatus(`Running LLM simulation ${i + 1}/${runCount}...`);
+      setProgressNote(`LLM simulation run ${i + 1}/${runCount} in progress...`);
       const sim = await api("/simulation/run", {
         method: "POST",
         body: JSON.stringify({
@@ -107,55 +173,104 @@ export function ComparisonModule({ tasks, agents, modelOptions, onStatus, defaul
         backlog: Number(sim.summary?.total_backlog ?? 0),
         llm_steps: Number(sim.summary?.llm_steps ?? 0),
         heuristic_fallback_steps: Number(sim.summary?.heuristic_fallback_steps ?? 0),
+        invalid_action_rate: Number(sim.summary?.invalid_action_rate ?? 0),
+        repaired_action_rate: Number(sim.summary?.repaired_action_rate ?? 0),
+        auto_switch_count: Number(sim.summary?.auto_switch_count ?? 0),
       });
     }
     return rows;
   };
 
-  const evaluateTrained = async () => {
-    const body = {
-      model_path: modelPath,
-      model_type: modelType,
-      episodes: Number(episodes),
-      task_ids: [taskId],
-    };
-    try {
-      return await api("/rl/evaluate", {
-        method: "POST",
-        body: JSON.stringify(body),
-      });
-    } catch (err) {
-      const msg = String(err?.message || "");
-      if (msg.includes("422")) {
-        onStatus("Trained model type check failed, retrying with auto detection...");
-        return await api("/rl/evaluate", {
+  const selectBestModelConfig = async (evalEpisodes) => {
+    const candidates = modelOptions.filter((m) => m?.exists && m?.path);
+    if (!candidates.length) return null;
+    let best = null;
+    for (let i = 0; i < candidates.length; i += 1) {
+      const c = candidates[i];
+      setProgressNote(`Evaluating trained model ${i + 1}/${candidates.length}: ${c.label}`);
+      try {
+        const res = await api("/rl/evaluate", {
           method: "POST",
-          body: JSON.stringify({ ...body, model_type: "auto" }),
+          body: JSON.stringify({
+            model_path: c.path,
+            model_type: c.model_type || "auto",
+            episodes: evalEpisodes,
+            task_ids: [taskId],
+          }),
         });
+        const score = Number(res.results?.[0]?.grader_score ?? 0);
+        if (best == null || score > best.score) {
+          best = { path: c.path, model_type: c.model_type || "auto", score, label: c.label };
+        }
+      } catch (_err) {
+        // Skip failing candidate and continue.
       }
-      throw err;
     }
+    return best;
   };
 
   const runCompare = async () => {
     setBusy(true);
+    const seedRuns = Math.max(5, Math.min(10, Number(runs)));
+    const evalEpisodes = Math.max(5, Math.min(10, Number(episodes)));
+    const effectiveSteps =
+      taskId === "cross_department_hard"
+        ? Math.max(70, Number(steps))
+        : taskId === "mixed_urgency_medium"
+          ? Math.max(60, Number(steps))
+          : Number(steps);
+    setProgressNote("Preparing multi-seed comparison...");
     try {
+      let chosenModelPath = modelPath;
+      let chosenModelType = modelType;
+      if (autoSelectBestModel) {
+        const best = await selectBestModelConfig(evalEpisodes);
+        if (best?.path) {
+          chosenModelPath = best.path;
+          chosenModelType = best.model_type === "auto" ? "maskable" : best.model_type;
+          setModelPath(chosenModelPath);
+          setModelType(chosenModelType);
+          onStatus(`Auto-selected best trained config: ${best.label} (avg score ${fmt(best.score, 3)}).`);
+        }
+      }
+
+      setProgressNote("Running baseline policy benchmark...");
       const [baseline, trained] = await Promise.all([
         api("/benchmark", {
           method: "POST",
           body: JSON.stringify({
             task_id: taskId,
-            runs: Number(runs),
-            max_steps: Number(steps),
+            runs: seedRuns,
+            max_steps: effectiveSteps,
             agent_policies: [policyName],
             seed_base: Number(seedBase),
           }),
         }),
-        evaluateTrained(),
+        (async () => {
+          const body = {
+            model_path: chosenModelPath,
+            model_type: chosenModelType,
+            episodes: evalEpisodes,
+            task_ids: [taskId],
+          };
+          try {
+            return await api("/rl/evaluate", { method: "POST", body: JSON.stringify(body) });
+          } catch (err) {
+            const msg = String(err?.message || "");
+            if (msg.includes("422")) {
+              return await api("/rl/evaluate", {
+                method: "POST",
+                body: JSON.stringify({ ...body, model_type: "auto" }),
+              });
+            }
+            throw err;
+          }
+        })(),
       ]);
 
       const baselineScore = Number(baseline.agent_results?.[0]?.average_score ?? 0);
       const trainedScore = Number(trained.results?.[0]?.grader_score ?? 0);
+      setProgressNote("Baseline and trained-model evaluation complete. Processing optional LLM runs...");
 
       let llmRuns = [];
       let llmScore = null;
@@ -164,8 +279,8 @@ export function ComparisonModule({ tasks, agents, modelOptions, onStatus, defaul
         try {
           llmRuns = await runLlmBatch({
             task: taskId,
-            runCount: Number(runs),
-            maxSteps: Number(steps),
+            runCount: seedRuns,
+            maxSteps: effectiveSteps,
             seedStart: Number(seedBase),
           });
           if (llmRuns.length) {
@@ -176,6 +291,7 @@ export function ComparisonModule({ tasks, agents, modelOptions, onStatus, defaul
         }
       }
 
+      setProgressNote("Finalizing comparison and saving history...");
       setResult(normalizeResultShape({
         baselineScore,
         trainedScore,
@@ -185,6 +301,9 @@ export function ComparisonModule({ tasks, agents, modelOptions, onStatus, defaul
         deltaLlmVsBaseline: llmScore == null ? null : llmScore - baselineScore,
         baselineRuns: baseline.agent_results?.[0]?.runs || [],
         llmRuns,
+      }, {
+        runs: seedRuns,
+        seed_base: Number(seedBase),
       }));
       try {
         await api("/history/comparisons", {
@@ -192,12 +311,12 @@ export function ComparisonModule({ tasks, agents, modelOptions, onStatus, defaul
           body: JSON.stringify({
             task_id: taskId,
             baseline_policy: policyName,
-            model_path: modelPath,
-            model_type: modelType,
+            model_path: chosenModelPath,
+            model_type: chosenModelType,
             include_llm: includeLlm,
-            runs: Number(runs),
-            steps: Number(steps),
-            episodes: Number(episodes),
+            runs: seedRuns,
+            steps: effectiveSteps,
+            episodes: evalEpisodes,
             seed_base: Number(seedBase),
             result: {
               baselineScore,
@@ -217,11 +336,12 @@ export function ComparisonModule({ tasks, agents, modelOptions, onStatus, defaul
       }
       const llmPart = llmScore == null ? "LLM=n/a" : `LLM=${fmt(llmScore, 3)}`;
       onStatus(
-        `Comparison completed. baseline=${fmt(baselineScore, 3)} | trained=${fmt(trainedScore, 3)} | ${llmPart}`
+        `Comparison completed (multi-seed=${seedRuns}). baseline=${fmt(baselineScore, 3)} | trained=${fmt(trainedScore, 3)} | ${llmPart}`
       );
     } catch (err) {
       onStatus(err.message);
     } finally {
+      setProgressNote("");
       setBusy(false);
     }
   };
@@ -276,7 +396,7 @@ export function ComparisonModule({ tasks, agents, modelOptions, onStatus, defaul
           </label>
           <label>
             Baseline Runs
-            <input type="number" min={1} max={20} value={runs} onChange={(e) => setRuns(e.target.value)} />
+            <input type="number" min={5} max={10} value={runs} onChange={(e) => setRuns(e.target.value)} />
           </label>
           <label>
             Seed Base
@@ -288,7 +408,7 @@ export function ComparisonModule({ tasks, agents, modelOptions, onStatus, defaul
           </label>
           <label>
             Eval Episodes
-            <input type="number" min={1} max={20} value={episodes} onChange={(e) => setEpisodes(e.target.value)} />
+            <input type="number" min={5} max={10} value={episodes} onChange={(e) => setEpisodes(e.target.value)} />
           </label>
           <label>
             LLM Simulation
@@ -297,12 +417,31 @@ export function ComparisonModule({ tasks, agents, modelOptions, onStatus, defaul
               <option value="off">Skip</option>
             </select>
           </label>
+          <label>
+            Trained Model Selection
+            <select
+              value={autoSelectBestModel ? "auto" : "manual"}
+              onChange={(e) => setAutoSelectBestModel(e.target.value === "auto")}
+            >
+              <option value="auto">Auto-select best (avg score)</option>
+              <option value="manual">Use selected model</option>
+            </select>
+          </label>
         </div>
         <div className="row">
           <button onClick={runCompare} disabled={busy || !modelPath}>
             {busy ? "Comparing..." : "Run Comparison"}
           </button>
+          <button className="ghost" onClick={clearComparisonHistory}>
+            Clear Saved History
+          </button>
         </div>
+        {busy ? (
+          <div className="loading-inline">
+            <span className="spinner-dot" />
+            <span>{progressNote || "Running comparison..."}</span>
+          </div>
+        ) : null}
       </article>
 
       {result ? (
@@ -323,6 +462,9 @@ export function ComparisonModule({ tasks, agents, modelOptions, onStatus, defaul
               <p className="muted">
                 Delta (llm - baseline): <strong>{fmt(result.deltaLlmVsBaseline, 3)}</strong>
               </p>
+            ) : null}
+            {result.legacySnapshotWithoutRunRows ? (
+              <p className="muted">Legacy snapshot detected: per-run rows were not stored; table rows below are reconstructed placeholders from saved summary.</p>
             ) : null}
             {result.llmError ? <p className="muted">LLM simulation error: {result.llmError}</p> : null}
           </article>
@@ -372,6 +514,9 @@ export function ComparisonModule({ tasks, agents, modelOptions, onStatus, defaul
                       <th>Backlog</th>
                       <th>LLM Steps</th>
                       <th>Fallback Steps</th>
+                      <th>Invalid Rate</th>
+                      <th>Repaired Rate</th>
+                      <th>Auto Switches</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -385,6 +530,9 @@ export function ComparisonModule({ tasks, agents, modelOptions, onStatus, defaul
                         <td>{r.backlog}</td>
                         <td>{r.llm_steps}</td>
                         <td>{r.heuristic_fallback_steps}</td>
+                        <td>{fmt((r.invalid_action_rate || 0) * 100, 1)}%</td>
+                        <td>{fmt((r.repaired_action_rate || 0) * 100, 1)}%</td>
+                        <td>{r.auto_switch_count || 0}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -435,13 +583,29 @@ export function ComparisonModule({ tasks, agents, modelOptions, onStatus, defaul
                           setIncludeLlm(Boolean(row.include_llm));
                           const id = String(row.comparison_id || "");
                           const loadFromRow = () => {
-                            setResult(normalizeResultShape(row.result));
+                            setResult(normalizeResultShape(row.result, row));
                             onStatus(`Loaded saved comparison ${id.slice(0, 8)}.`);
                           };
                           if (id) {
                             api(`/history/comparisons/${id}`)
-                              .then((detail) => {
-                                setResult(normalizeResultShape(detail?.result));
+                              .then(async (detail) => {
+                                const normalized = normalizeResultShape(detail?.result, detail || row);
+                                if (normalized.legacySnapshotWithoutRunRows) {
+                                  try {
+                                    onStatus(`Repairing legacy comparison ${id.slice(0, 8)}...`);
+                                    await api(`/history/comparisons/${id}/repair`, { method: "POST" });
+                                    const repaired = await api(`/history/comparisons/${id}`);
+                                    setResult(normalizeResultShape(repaired?.result, repaired || row));
+                                    onStatus(`Loaded repaired comparison ${id.slice(0, 8)}.`);
+                                    await refreshHistory();
+                                    return;
+                                  } catch (_err) {
+                                    setResult(normalized);
+                                    onStatus(`Loaded legacy comparison ${id.slice(0, 8)} (repair unavailable).`);
+                                    return;
+                                  }
+                                }
+                                setResult(normalized);
                                 onStatus(`Loaded saved comparison ${id.slice(0, 8)}.`);
                               })
                               .catch(() => {

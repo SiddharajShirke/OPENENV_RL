@@ -30,6 +30,8 @@ from __future__ import annotations
 from collections import OrderedDict
 import os
 from pathlib import Path
+import shutil
+import subprocess
 from threading import Lock
 import time
 from typing import Any, Literal
@@ -428,6 +430,21 @@ class WorkflowComponentsResponse(BaseModel):
     components: list[WorkflowComponentStatus]
 
 
+class OpenEnvComplianceItem(BaseModel):
+    key: str
+    label: str
+    status: Literal["pass", "fail", "unknown"]
+    detail: str
+
+
+class OpenEnvComplianceResponse(BaseModel):
+    checked_at: float
+    items: list[OpenEnvComplianceItem]
+    openenv_validate_exit_code: int | None = None
+    openenv_validate_stdout_tail: str | None = None
+    openenv_validate_stderr_tail: str | None = None
+
+
 class WorkflowRunRequest(BaseModel):
     workflow_id: Literal["baseline_openai", "inference", "phase2_eval"]
     timeout_seconds: int = Field(default=180, ge=10, le=1200)
@@ -548,6 +565,7 @@ class SimulationStep(BaseModel):
     llm_error: str | None = None
     llm_key_label: str | None = None
     repair_note: str | None = None
+    switch_note: str | None = None
 
 
 class SimulationResponse(BaseModel):
@@ -640,6 +658,18 @@ class ComparisonHistoryCreateResponse(BaseModel):
 
 class ComparisonHistoryListResponse(BaseModel):
     comparisons: list[dict[str, Any]]
+
+
+class HistoryClearResponse(BaseModel):
+    cleared: bool
+    deleted_rows: int
+    scope: str
+
+
+class ComparisonHistoryRepairResponse(BaseModel):
+    comparison_id: str
+    repaired: bool
+    detail: str
 
 
 # ── Application ───────────────────────────────────────────────────────────────
@@ -1063,6 +1093,106 @@ def api_workflow_components() -> WorkflowComponentsResponse:
         ),
     ]
     return WorkflowComponentsResponse(components=components)
+
+
+@api.get(
+    "/openenv/compliance",
+    response_model=OpenEnvComplianceResponse,
+    summary="Check OpenEnv interface/compliance indicators for this project",
+)
+def api_openenv_compliance(run_validate: bool = Query(default=False)) -> OpenEnvComplianceResponse:
+    repo_root = Path(__file__).resolve().parent.parent
+    openenv_yaml = repo_root / "openenv.yaml"
+
+    route_paths = {getattr(r, "path", "") for r in app.routes}
+
+    def _has_path(path: str) -> bool:
+        return path in route_paths
+
+    items: list[OpenEnvComplianceItem] = [
+        OpenEnvComplianceItem(
+            key="typed_action_model",
+            label="Typed Action model (Pydantic)",
+            status="pass" if issubclass(ActionModel, BaseModel) else "fail",
+            detail=f"ActionModel type: {ActionModel.__name__}",
+        ),
+        OpenEnvComplianceItem(
+            key="typed_observation_model",
+            label="Typed Observation model (Pydantic)",
+            status="pass" if issubclass(ObservationModel, BaseModel) else "fail",
+            detail=f"ObservationModel type: {ObservationModel.__name__}",
+        ),
+        OpenEnvComplianceItem(
+            key="typed_step_info_model",
+            label="Typed step info model (Pydantic)",
+            status="pass" if issubclass(StepInfoModel, BaseModel) else "fail",
+            detail=f"StepInfoModel type: {StepInfoModel.__name__}",
+        ),
+        OpenEnvComplianceItem(
+            key="api_step_reset_state",
+            label="step()/reset()/state() API exposed",
+            status="pass" if (_has_path("/reset") and _has_path("/step") and _has_path("/state")) else "fail",
+            detail="Expected endpoints: POST /reset, POST /step, GET|POST /state",
+        ),
+        OpenEnvComplianceItem(
+            key="openenv_yaml",
+            label="openenv.yaml metadata file",
+            status="pass" if openenv_yaml.exists() else "fail",
+            detail=str(openenv_yaml),
+        ),
+    ]
+
+    validate_rc: int | None = None
+    validate_out: str | None = None
+    validate_err: str | None = None
+    if run_validate:
+        openenv_bin = shutil.which("openenv")
+        if openenv_bin is None:
+            items.append(
+                OpenEnvComplianceItem(
+                    key="openenv_validate",
+                    label="openenv validate execution",
+                    status="unknown",
+                    detail="openenv CLI not found in runtime PATH.",
+                )
+            )
+        else:
+            proc = subprocess.run(
+                [openenv_bin, "validate"],
+                cwd=str(repo_root),
+                capture_output=True,
+                text=True,
+                timeout=120,
+                check=False,
+            )
+            validate_rc = int(proc.returncode)
+            validate_out = (proc.stdout or "")[-4000:]
+            validate_err = (proc.stderr or "")[-2000:]
+            items.append(
+                OpenEnvComplianceItem(
+                    key="openenv_validate",
+                    label="openenv validate execution",
+                    status="pass" if proc.returncode == 0 else "fail",
+                    detail=f"Exit code: {proc.returncode}",
+                )
+            )
+    else:
+        items.append(
+            OpenEnvComplianceItem(
+                key="openenv_validate",
+                label="openenv validate execution",
+                status="unknown",
+                detail="Not executed in this check. Pass run_validate=true to execute.",
+            )
+        )
+
+    return OpenEnvComplianceResponse(
+        checked_at=time.time(),
+        items=items,
+        openenv_validate_exit_code=validate_rc,
+        openenv_validate_stdout_tail=validate_out,
+        openenv_validate_stderr_tail=validate_err,
+    )
 
 
 @api.post(
@@ -1686,6 +1816,20 @@ def api_training_stop(job_id: str) -> TrainingJobStopResponse:
     )
 
 
+@api.delete(
+    "/training/jobs",
+    response_model=HistoryClearResponse,
+    summary="Clear persisted training job history",
+)
+def api_training_jobs_clear(clear_artifacts: bool = Query(default=False)) -> HistoryClearResponse:
+    deleted = _training_jobs.clear_jobs(clear_artifacts=clear_artifacts)
+    return HistoryClearResponse(
+        cleared=True,
+        deleted_rows=int(deleted),
+        scope="training_jobs",
+    )
+
+
 @api.get(
     "/history/simulations",
     response_model=SimulationHistoryListResponse,
@@ -1715,6 +1859,25 @@ def api_history_simulation(run_id: str) -> dict[str, Any]:
             detail=f"Simulation history '{run_id}' not found.",
         )
     return row
+
+
+@api.delete(
+    "/history/simulations",
+    response_model=HistoryClearResponse,
+    summary="Clear persisted simulation history",
+)
+def api_history_simulations_clear() -> HistoryClearResponse:
+    if not _persistence.enabled:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Persistence is disabled.",
+        )
+    deleted = _persistence.clear_simulation_runs()
+    return HistoryClearResponse(
+        cleared=True,
+        deleted_rows=int(deleted),
+        scope="simulation_history",
+    )
 
 
 @api.post(
@@ -1767,6 +1930,146 @@ def api_history_comparison(comparison_id: str) -> dict[str, Any]:
             detail=f"Comparison history '{comparison_id}' not found.",
         )
     return row
+
+
+@api.post(
+    "/history/comparisons/{comparison_id}/repair",
+    response_model=ComparisonHistoryRepairResponse,
+    summary="Repair legacy comparison snapshot by backfilling per-run rows",
+)
+def api_history_comparison_repair(comparison_id: str) -> ComparisonHistoryRepairResponse:
+    if not _persistence.enabled:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Persistence is disabled.",
+        )
+
+    row = _persistence.get_comparison_run(comparison_id)
+    if row is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Comparison history '{comparison_id}' not found.",
+        )
+
+    result = row.get("result") if isinstance(row.get("result"), dict) else {}
+    include_llm = bool(row.get("include_llm", True))
+    has_baseline_runs = isinstance(result.get("baselineRuns"), list) and len(result.get("baselineRuns")) > 0
+    has_llm_runs = (not include_llm) or (isinstance(result.get("llmRuns"), list) and len(result.get("llmRuns")) > 0)
+
+    if has_baseline_runs and has_llm_runs:
+        return ComparisonHistoryRepairResponse(
+            comparison_id=comparison_id,
+            repaired=False,
+            detail="No repair needed. Snapshot already contains per-run rows.",
+        )
+
+    task_id = str(row.get("task_id") or env_settings.default_task_id)
+    baseline_policy = str(row.get("baseline_policy") or "backlog_clearance")
+    runs = max(1, int(row.get("runs") or 1))
+    steps = max(1, int(row.get("steps") or 80))
+    seed_base = int(row.get("seed_base") or 100)
+
+    baseline_runs: list[dict[str, Any]] = []
+    for i in range(runs):
+        seed = seed_base + i
+        rr = run_policy_episode(
+            task_id=task_id,
+            policy_name=baseline_policy,
+            seed=seed,
+            max_steps=steps,
+        )
+        baseline_runs.append(
+            {
+                "run_index": i + 1,
+                "seed": int(rr["seed"]),
+                "score": float(rr["score"]),
+                "reward_sum": float(rr["reward_sum"]),
+                "completed": int(rr["completed"]),
+                "backlog": int(rr["backlog"]),
+            }
+        )
+
+    llm_runs: list[dict[str, Any]] = []
+    llm_error: str | None = None
+    if include_llm:
+        try:
+            for i in range(runs):
+                seed = seed_base + i
+                sim = run_simulation(
+                    task_id=task_id,
+                    agent_mode="llm_inference",
+                    max_steps=steps,
+                    seed=seed,
+                    policy_name="backlog_clearance",
+                )
+                llm_runs.append(
+                    {
+                        "run_index": i + 1,
+                        "seed": int(sim.seed),
+                        "score": float(sim.score),
+                        "reward_sum": float(sim.total_reward),
+                        "completed": int(sim.summary.get("total_completed", 0)),
+                        "backlog": int(sim.summary.get("total_backlog", 0)),
+                        "llm_steps": int(sim.summary.get("llm_steps", 0)),
+                        "heuristic_fallback_steps": int(sim.summary.get("heuristic_fallback_steps", 0)),
+                        "invalid_action_rate": float(sim.summary.get("invalid_action_rate", 0.0)),
+                        "repaired_action_rate": float(sim.summary.get("repaired_action_rate", 0.0)),
+                        "auto_switch_count": int(sim.summary.get("auto_switch_count", 0)),
+                    }
+                )
+        except Exception as exc:
+            llm_error = str(exc)
+
+    baseline_score = float(sum(float(x["score"]) for x in baseline_runs) / max(1, len(baseline_runs)))
+    llm_score = (
+        float(sum(float(x["score"]) for x in llm_runs) / max(1, len(llm_runs)))
+        if llm_runs
+        else result.get("llmScore")
+    )
+
+    repaired_result = dict(result)
+    repaired_result["baselineScore"] = baseline_score
+    repaired_result["baselineRuns"] = baseline_runs
+    repaired_result["llmRuns"] = llm_runs
+    repaired_result["llmScore"] = llm_score
+    if llm_error:
+        repaired_result["llmError"] = llm_error
+
+    updated = dict(row)
+    updated["result"] = repaired_result
+    updated["updated_at"] = time.time()
+
+    saved_id = _persistence.create_comparison_run(updated)
+    if saved_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to persist repaired comparison snapshot.",
+        )
+
+    return ComparisonHistoryRepairResponse(
+        comparison_id=comparison_id,
+        repaired=True,
+        detail="Repaired legacy snapshot by backfilling per-run baseline/LLM rows.",
+    )
+
+
+@api.delete(
+    "/history/comparisons",
+    response_model=HistoryClearResponse,
+    summary="Clear persisted comparison history",
+)
+def api_history_comparisons_clear() -> HistoryClearResponse:
+    if not _persistence.enabled:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Persistence is disabled.",
+        )
+    deleted = _persistence.clear_comparison_runs()
+    return HistoryClearResponse(
+        cleared=True,
+        deleted_rows=int(deleted),
+        scope="comparison_history",
+    )
 
 
 # Compatibility aliases for clients/environments that do not route through /api.
@@ -1860,6 +2163,15 @@ def training_stop_alias(job_id: str) -> TrainingJobStopResponse:
     return api_training_stop(job_id)
 
 
+@app.delete(
+    "/training/jobs",
+    response_model=HistoryClearResponse,
+    include_in_schema=False,
+)
+def training_jobs_clear_alias(clear_artifacts: bool = Query(default=False)) -> HistoryClearResponse:
+    return api_training_jobs_clear(clear_artifacts=clear_artifacts)
+
+
 @app.get(
     "/history/simulations",
     response_model=SimulationHistoryListResponse,
@@ -1867,6 +2179,15 @@ def training_stop_alias(job_id: str) -> TrainingJobStopResponse:
 )
 def history_simulations_alias(limit: int = Query(default=20, ge=1, le=500)) -> SimulationHistoryListResponse:
     return api_history_simulations(limit=limit)
+
+
+@app.delete(
+    "/history/simulations",
+    response_model=HistoryClearResponse,
+    include_in_schema=False,
+)
+def history_simulations_clear_alias() -> HistoryClearResponse:
+    return api_history_simulations_clear()
 
 
 @app.get(
@@ -1905,6 +2226,24 @@ def history_comparison_alias(comparison_id: str) -> dict[str, Any]:
     return api_history_comparison(comparison_id)
 
 
+@app.delete(
+    "/history/comparisons",
+    response_model=HistoryClearResponse,
+    include_in_schema=False,
+)
+def history_comparisons_clear_alias() -> HistoryClearResponse:
+    return api_history_comparisons_clear()
+
+
+@app.post(
+    "/history/comparisons/{comparison_id}/repair",
+    response_model=ComparisonHistoryRepairResponse,
+    include_in_schema=False,
+)
+def history_comparison_repair_alias(comparison_id: str) -> ComparisonHistoryRepairResponse:
+    return api_history_comparison_repair(comparison_id)
+
+
 @app.get(
     "/rl/models",
     response_model=RLModelsResponse,
@@ -1930,6 +2269,15 @@ def rl_run_alias(body: RLRunRequest) -> RLRunResponse:
 )
 def rl_evaluate_alias(body: RLEvaluateRequest) -> RLEvaluateResponse:
     return api_rl_evaluate(body)
+
+
+@app.get(
+    "/openenv/compliance",
+    response_model=OpenEnvComplianceResponse,
+    include_in_schema=False,
+)
+def openenv_compliance_alias(run_validate: bool = Query(default=False)) -> OpenEnvComplianceResponse:
+    return api_openenv_compliance(run_validate=run_validate)
 
 
 app.include_router(api)
