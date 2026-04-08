@@ -83,6 +83,12 @@ async def test_reset_accepts_empty_body_for_validator_compat() -> None:
     assert r.status_code == 200
     assert "session_id" in r.json()
 
+    async def test_reset_accepts_missing_body_for_validator_compat() -> None:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url=BASE) as c:
+            r = await c.post("/reset")
+        assert r.status_code == 200
+        assert "session_id" in r.json()
+
 
 # ── POST /step ─────────────────────────────────────────────────────────────────
 
@@ -276,6 +282,12 @@ async def test_api_alias_reset_and_autostep_flow() -> None:
     assert "action" in data
     assert "observation" in data
     assert isinstance(data["reward"], float)
+
+    async def test_frontend_alias_reset_accepts_missing_body() -> None:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url=BASE) as c:
+            reset_r = await c.post("/api/reset")
+        assert reset_r.status_code == 200
+        assert "session_id" in reset_r.json()
 
 
 async def test_api_benchmark_returns_agent_results() -> None:
