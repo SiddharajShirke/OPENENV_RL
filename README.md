@@ -1,14 +1,4 @@
-﻿---
-title: OPENENV_RL_08_04
-emoji: "🏛️"
-colorFrom: gray
-colorTo: blue
-sdk: docker
-app_port: 7860
-pinned: false
----
-
-# Gov Workflow OpenEnv
+﻿# Gov Workflow OpenEnv
 
 Real-world OpenEnv environment for government-service workflow optimization, with a full FastAPI bridge, RL training stack, and React operations UI.
 
@@ -27,7 +17,7 @@ The project was validated against the required submission checks.
 
 | Check | Command / Endpoint | Result | Status |
 |---|---|---|---|
-| HF Space live check | POST https://abhayshinde-openenv-rl-08-04.hf.space/reset | HTTP 200 | Passed |
+| HF Space live check | POST https://huggingface.co/spaces/Otter21/OPENENV_RL_01| HTTP 200 | Passed |
 | OpenEnv validation | openenv validate | [OK] OPENENV_RL: Ready for multi-mode deployment | Passed |
 | Docker build | docker build . | Building 528.4s (29/29) FINISHED | Passed |
 
