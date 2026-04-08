@@ -41,7 +41,7 @@ async def test_health_returns_ok() -> None:
 async def test_reset_returns_session_id_and_observation() -> None:
     async with AsyncClient(transport=ASGITransport(app=app), base_url=BASE) as c:
         r = await c.post("/reset", json={"task_id": "district_backlog_easy", "seed": 11})
-    assert r.status_code == 201
+    assert r.status_code == 200
     data = r.json()
     assert "session_id" in data
     assert len(data["session_id"]) == 36  # UUID4 canonical string length
@@ -66,15 +66,22 @@ async def test_reset_same_seed_produces_identical_observations() -> None:
 async def test_reset_medium_task_accepted() -> None:
     async with AsyncClient(transport=ASGITransport(app=app), base_url=BASE) as c:
         r = await c.post("/reset", json={"task_id": "mixed_urgency_medium", "seed": 22})
-    assert r.status_code == 201
+    assert r.status_code == 200
     assert r.json()["observation"]["task_id"] == "mixed_urgency_medium"
 
 
 async def test_reset_hard_task_accepted() -> None:
     async with AsyncClient(transport=ASGITransport(app=app), base_url=BASE) as c:
         r = await c.post("/reset", json={"task_id": "cross_department_hard", "seed": 33})
-    assert r.status_code == 201
+    assert r.status_code == 200
     assert r.json()["observation"]["task_id"] == "cross_department_hard"
+
+
+async def test_reset_accepts_empty_body_for_validator_compat() -> None:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url=BASE) as c:
+        r = await c.post("/reset", json={})
+    assert r.status_code == 200
+    assert "session_id" in r.json()
 
 
 # ── POST /step ─────────────────────────────────────────────────────────────────
@@ -90,6 +97,7 @@ async def test_step_advance_time_moves_day_forward() -> None:
     data = r.json()
     assert data["observation"]["day"] == 1
     assert isinstance(data["reward"], float)
+    assert isinstance(data["done"], bool)
     assert data["terminated"] is False
     assert data["truncated"] is False
     assert data["info"]["invalid_action"] is False
@@ -120,6 +128,7 @@ async def test_step_invalid_action_returns_200_with_penalty_not_error() -> None:
     assert r.status_code == 200
     data = r.json()
     assert data["info"]["invalid_action"] is True
+    assert isinstance(data["info"]["last_action_error"], str)
     assert data["reward"] <= 0
 
 
@@ -244,3 +253,139 @@ async def test_delete_unknown_session_returns_404() -> None:
     async with AsyncClient(transport=ASGITransport(app=app), base_url=BASE) as c:
         r = await c.delete("/sessions/not-a-real-session")
     assert r.status_code == 404
+
+
+async def test_ui_page_is_served() -> None:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url=BASE) as c:
+        r = await c.get("/ui")
+    assert r.status_code == 200
+    assert "text/html" in r.headers.get("content-type", "")
+
+
+async def test_api_alias_reset_and_autostep_flow() -> None:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url=BASE) as c:
+        reset_r = await c.post("/api/reset", json={"task_id": "district_backlog_easy", "seed": 11})
+        sid = reset_r.json()["session_id"]
+        step_r = await c.post(
+            "/api/autostep",
+            json={"session_id": sid, "agent_policy": "backlog_clearance"},
+        )
+    assert step_r.status_code == 200
+    data = step_r.json()
+    assert data["agent_policy"] == "backlog_clearance"
+    assert "action" in data
+    assert "observation" in data
+    assert isinstance(data["reward"], float)
+
+
+async def test_api_benchmark_returns_agent_results() -> None:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url=BASE) as c:
+        r = await c.post(
+            "/api/benchmark",
+            json={
+                "task_id": "district_backlog_easy",
+                "agent_policies": ["urgent_first", "backlog_clearance"],
+                "runs": 2,
+                "max_steps": 100,
+                "seed_base": 500,
+            },
+        )
+    assert r.status_code == 200
+    data = r.json()
+    assert data["task_id"] == "district_backlog_easy"
+    assert data["requested_runs"] == 2
+    assert len(data["agent_results"]) == 2
+    for agent in data["agent_results"]:
+        assert len(agent["runs"]) == 2
+
+
+async def test_api_benchmark_summary_matches_run_scores_and_is_reproducible() -> None:
+    payload = {
+        "task_id": "district_backlog_easy",
+        "agent_policies": ["urgent_first"],
+        "runs": 3,
+        "max_steps": 80,
+        "seed_base": 777,
+    }
+    async with AsyncClient(transport=ASGITransport(app=app), base_url=BASE) as c:
+        r1 = await c.post("/api/benchmark", json=payload)
+        r2 = await c.post("/api/benchmark", json=payload)
+
+    assert r1.status_code == 200
+    assert r2.status_code == 200
+
+    a1 = r1.json()["agent_results"][0]
+    a2 = r2.json()["agent_results"][0]
+    runs1 = a1["runs"]
+    scores = [float(row["score"]) for row in runs1]
+    expected_avg = sum(scores) / len(scores)
+
+    assert abs(float(a1["average_score"]) - expected_avg) < 1e-9
+    assert runs1 == a2["runs"]
+    assert float(a1["average_score"]) == float(a2["average_score"])
+
+
+async def test_api_workflow_components_visible() -> None:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url=BASE) as c:
+        r = await c.get("/api/workflows/components")
+    assert r.status_code == 200
+    data = r.json()
+    assert "components" in data
+    names = {row["component"] for row in data["components"]}
+    assert "baseline_openai.py" in names
+    assert "inference.py" in names
+    assert "openenv_api" in names
+
+
+async def test_api_rl_models_list_shape() -> None:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url=BASE) as c:
+        r = await c.get("/api/rl/models")
+    assert r.status_code == 200
+    data = r.json()
+    assert "models" in data
+    assert isinstance(data["models"], list)
+    assert len(data["models"]) >= 1
+
+
+async def test_api_rl_run_invalid_model_returns_422() -> None:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url=BASE) as c:
+        r = await c.post(
+            "/api/rl/run",
+            json={
+                "task_id": "district_backlog_easy",
+                "model_path": "results/best_model/does_not_exist.zip",
+                "model_type": "maskable",
+                "max_steps": 10,
+            },
+        )
+    assert r.status_code == 422
+
+
+async def test_api_workflow_run_invalid_id_returns_422() -> None:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url=BASE) as c:
+        r = await c.post(
+            "/api/workflows/run",
+            json={
+                "workflow_id": "not_allowed",
+            },
+        )
+    assert r.status_code == 422
+
+
+async def test_api_workflow_run_inference_returns_output_fields() -> None:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url=BASE) as c:
+        r = await c.post(
+            "/api/workflows/run",
+            json={
+                "workflow_id": "inference",
+                "max_steps": 1,
+                "timeout_seconds": 30,
+            },
+        )
+    assert r.status_code == 200
+    data = r.json()
+    assert data["workflow_id"] == "inference"
+    assert "command" in data
+    assert "exit_code" in data
+    assert "stdout" in data
+    assert "stderr" in data

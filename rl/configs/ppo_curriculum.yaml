@@ -1,0 +1,29 @@
+# Phase 2 -- Curriculum PPO across all 3 tasks
+hyperparameters:
+  learning_rate: 0.0002
+  n_steps: 512
+  batch_size: 64
+  n_epochs: 10
+  gamma: 0.99
+  gae_lambda: 0.95
+  clip_range: 0.2
+  ent_coef: 0.005
+  vf_coef: 0.5
+  max_grad_norm: 0.5
+  net_arch: [256, 256]
+
+curriculum:
+  stage1_end_frac: 0.30
+  stage2_end_frac: 0.70
+  stage3_weights: [0.20, 0.40, 0.40]
+
+training:
+  total_timesteps: 500000
+  n_envs: 4
+  seed: 42
+  warm_start_from: "results/best_model/phase1_final"
+
+target_scores:
+  district_backlog_easy: 0.82
+  mixed_urgency_medium: 0.72
+  cross_department_hard: 0.60

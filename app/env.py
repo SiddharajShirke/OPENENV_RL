@@ -1,7 +1,7 @@
 from __future__ import annotations
 import random
 from uuid import uuid4
-from app.graders import grade_episode
+from app.config import env_settings
 from app.models import (
     ActionModel, ActionType, EpisodeMetricsModel, EpisodeStateModel,
     ObservationModel, OfficerPool, PriorityMode, QueueSnapshot,
@@ -105,13 +105,14 @@ class GovWorkflowEnv:
         )
         self.terminated = len(self.active_cases) == 0 and self.day > 0
         self.truncated  = self.day >= self.task.max_days and not self.terminated
-        preview = grade_episode(self.state()).score
+        preview = None  # grade_episode(self.state()).score # DEPRECATED: Too slow for RL training
 
         info = StepInfoModel(
             reward_breakdown=reward,
             newly_arrived_cases=day_metrics["new_arrivals"],
             newly_completed_cases=day_metrics["new_completions"],
             invalid_action=invalid_action,
+            last_action_error=self.last_action_message if invalid_action else None,
             grader_preview_score=preview,
             notes=notes,
         )
@@ -122,6 +123,9 @@ class GovWorkflowEnv:
             "message": self.last_action_message,
             "reward": reward.total_reward,
         })
+        if self.total_steps >= env_settings.max_steps_per_episode and not self.terminated:
+            self.truncated = True
+
         return self._build_observation(), reward.total_reward, self.terminated, self.truncated, info
 
     def state(self) -> EpisodeStateModel:

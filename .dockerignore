@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+.venv313/
+*.egg-info/
+dist/
+build/
+frontend/react/node_modules/
+frontend/react/dist/
+
+# Environment secrets
+.env
+.env.local
+.env.production
+
+# Git
+.git/
+.gitignore
+
+# Results and caches
+.pytest_cache/
+.tmp/
+pip_bootstrap/
+outputs/
+test_results.txt
+test_rl_output*.txt
+tests/test_output*.txt
+tests/test_run.txt
+
+# IDE / OS
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+.DS_Store
+
+# Docker
+.dockerignore
+
+# NVIDIA model test artifacts
+nvidia_models.txt
+tests/test_output*.txt
+tests/test_run.txt

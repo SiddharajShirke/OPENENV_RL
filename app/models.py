@@ -115,6 +115,7 @@ class StepInfoModel(BaseModel):
     newly_arrived_cases: int = 0
     newly_completed_cases: int = 0
     invalid_action: bool = False
+    last_action_error: str | None = None
     grader_preview_score: float | None = None
     notes: list[str] = Field(default_factory=list)
 

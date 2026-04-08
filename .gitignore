@@ -8,12 +8,28 @@ __pycache__/
 *.pyc
 *.pyo
 .venv/
+.venv313/
 *.egg-info/
 dist/
 build/
 
-# Results
-results/
-
 # pytest
 .pytest_cache/
+
+# Local temp/bootstrap
+.tmp/
+pip_bootstrap/
+
+# Runtime outputs
+outputs/
+
+# Frontend build cache/deps
+frontend/react/node_modules/
+frontend/react/.vite/
+frontend/react/.vite-temp/
+
+# Local test artifacts
+test_results.txt
+test_rl_output*.txt
+tests/test_output*.txt
+tests/test_run.txt

@@ -667,13 +667,22 @@ def run_episode(
     server_url: str,
     api_key: str | None,
     verbose: bool,
+    max_steps: int = MAX_LLM_STEPS,
+    delay_override: float | None = None,
 ) -> EpisodeResult:
+    """
+    Run a single episode with the specified agent and mode.
+    """
     seed = TASK_SEEDS[task_id]
+    
+    # ── Resolve delay ────────────────────────────────────────────────────────
+    # CLI override > Env Var > Global Constant
+    delay = delay_override if delay_override is not None else LLM_CALL_DELAY
 
     # Build environment client
     if mode == "http":
         client: DirectEnvClient | HttpEnvClient = HttpEnvClient(
-            task_id, seed, server_url
+            task_id, seed, base_url=server_url
         )
     else:
         client = DirectEnvClient(task_id, seed)
@@ -712,9 +721,10 @@ def run_episode(
         if os.environ.get("NVIDIA_API_KEY_2", ""):
             print(f"  Free  : {FREE_POOL}")
     print(f"  Agent : {agent_type}  |  Mode: {mode}  |  Seed: {seed}")
+    print(f"  Max steps: {max_steps}  |  Delay: {delay}s")
     print(f"{'═'*65}")
 
-    while not (client.terminated or client.truncated) and step_num < MAX_LLM_STEPS:
+    while not (client.terminated or client.truncated) and step_num < max_steps:
         step_num += 1
         current_model = agent.current_model
 
@@ -760,10 +770,10 @@ def run_episode(
         # FIX 3: throttle LLM calls — NVIDIA free tier ≈ 5 RPM (1 call / 12s)
         # Jitter avoids synchronized burst if multiple episodes run concurrently.
         if agent_type == "llm":
-            delay = LLM_CALL_DELAY + _random.uniform(-LLM_CALL_JITTER, LLM_CALL_JITTER)
+            actual_delay = delay + _random.uniform(-LLM_CALL_JITTER, LLM_CALL_JITTER)
             if not verbose:
-                print(f"  Executing step {step_num}/{MAX_LLM_STEPS}... [Sleeping {delay:.1f}s to respect rate limits]", end="\r", flush=True)
-            time.sleep(max(1.0, delay))
+                print(f"  Executing step {step_num}/{max_steps}... [Sleeping {actual_delay:.1f}s to respect rate limits]", end="\r", flush=True)
+            time.sleep(max(1.0, actual_delay))
             if not verbose:
                  print(" " * 80, end="\r", flush=True) # clear the line
 
@@ -892,6 +902,8 @@ Examples:
     )
     p.add_argument("--mode", choices=["direct", "http"], default="direct")
     p.add_argument("--url", default="http://localhost:7860")
+    p.add_argument("--max-steps", type=int, default=MAX_LLM_STEPS)
+    p.add_argument("--delay", type=float, default=None, help="Override LLM_CALL_DELAY (sec)")
     p.add_argument("--api-key", default=None)
     p.add_argument("--verbose", action="store_true")
     p.add_argument("--save-results", action="store_true")
@@ -936,6 +948,8 @@ def main() -> None:
             server_url=args.url,
             api_key=key,
             verbose=args.verbose,
+            max_steps=args.max_steps,
+            delay_override=args.delay,
         )
         results.append(result)
 

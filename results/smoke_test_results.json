@@ -1,0 +1,65 @@
+[
+  {
+    "task_id": "cross_department_hard",
+    "policy": "backlog_clearance",
+    "seed": 33,
+    "reward_sum": 178.5486,
+    "score": 0.6522,
+    "grader": "hard",
+    "metrics": {
+      "completion_rate": 0.4424,
+      "sla_compliance": 0.3879,
+      "document_rework_quality": 1.0,
+      "urgent_served_rate": 0.4151,
+      "fairness_score": 0.7205,
+      "escalation_discipline": 1.0,
+      "idle_efficiency": 1.0,
+      "fairness_gap": 0.2795
+    },
+    "steps": 89,
+    "completed": 73,
+    "backlog": 92
+  },
+  {
+    "task_id": "district_backlog_easy",
+    "policy": "backlog_clearance",
+    "seed": 11,
+    "reward_sum": 142.74,
+    "score": 0.6716,
+    "grader": "easy",
+    "metrics": {
+      "completion_rate": 0.5294,
+      "sla_compliance": 0.6667,
+      "document_rework_quality": 1.0,
+      "urgent_served_rate": 0.5385,
+      "fairness_score": 0.7786,
+      "escalation_discipline": 1.0,
+      "idle_efficiency": 1.0,
+      "fairness_gap": 0.2214
+    },
+    "steps": 33,
+    "completed": 27,
+    "backlog": 24
+  },
+  {
+    "task_id": "mixed_urgency_medium",
+    "policy": "backlog_clearance",
+    "seed": 22,
+    "reward_sum": 190.1674,
+    "score": 0.5867,
+    "grader": "medium",
+    "metrics": {
+      "completion_rate": 0.4804,
+      "sla_compliance": 0.5392,
+      "document_rework_quality": 1.0,
+      "urgent_served_rate": 0.3784,
+      "fairness_score": 0.5892,
+      "escalation_discipline": 1.0,
+      "idle_efficiency": 1.0,
+      "fairness_gap": 0.4108
+    },
+    "steps": 61,
+    "completed": 49,
+    "backlog": 53
+  }
+]

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gov Workflow OpenEnv Console</title>
+  <link rel="stylesheet" href="/ui/assets/styles.css" />
+</head>
+<body>
+  <div id="app-root" class="app-root">
+    <div class="boot">Loading frontend...</div>
+  </div>
+
+  <script>
+    window.__APP_MOUNTED__ = false;
+    setTimeout(function () {
+      if (!window.__APP_MOUNTED__) {
+        var root = document.getElementById("app-root");
+        if (root) {
+          root.innerHTML = "<div class='boot boot-error'><h2>Frontend bootstrap failed</h2><p>The React runtime could not load in this environment. Backend API is still active at <code>/docs</code>.</p></div>";
+        }
+      }
+    }, 6000);
+  </script>
+  <script type="module" src="/ui/assets/react_app.js"></script>
+</body>
+</html>

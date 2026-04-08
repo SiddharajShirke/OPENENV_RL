@@ -1,0 +1,86 @@
+spec_version: 1
+name: gov-workflow-openenv
+version: "0.3.0"
+type: space
+runtime: fastapi
+app: app.main:app
+port: 7860
+description: >
+  A real-world OpenEnv environment for government-service workflow control.
+  The agent optimizes avoidable administrative delay via priority control,
+  document resolution, staffing, escalation, and fairness balancing.
+
+entrypoint:
+  module: app.main
+  object: app
+  inference_script: inference.py
+
+environment:
+  class: app.env.GovWorkflowEnv
+  observation_model: app.models.ObservationModel
+  action_model: app.models.ActionModel
+  reward_model: app.models.RewardModel
+  state_model: app.models.EpisodeStateModel
+  step_info_model: app.models.StepInfoModel
+
+tasks:
+  - task_id: district_backlog_easy
+    seed: 11
+    description: >
+      Small district office with 3 services and generous SLA windows.
+      Tests baseline queue control and document handling.
+    grader: app.graders.grade_easy
+
+  - task_id: mixed_urgency_medium
+    seed: 22
+    description: >
+      Mid-sized office with mixed urgency and tighter fairness requirements.
+      Tests urgency prioritization and staffing trade-offs.
+    grader: app.graders.grade_medium
+
+  - task_id: cross_department_hard
+    seed: 33
+    description: >
+      Large cross-department office with high arrivals and strict fairness.
+      Tests escalation discipline and multi-queue balancing.
+    grader: app.graders.grade_hard
+
+api:
+  endpoints:
+    - method: GET
+      path: /health
+      description: Server and session health check
+    - method: POST
+      path: /reset
+      description: Create a new episode session and return initial observation
+    - method: POST
+      path: /step
+      description: Apply one action and advance simulation state
+    - method: GET
+      path: /state
+      description: Return current episode state (query param session_id)
+    - method: POST
+      path: /state
+      description: Return current episode state (body with session_id)
+    - method: POST
+      path: /grade
+      description: Run deterministic task grader for the current episode
+
+metadata:
+  domain: government-services
+  real_world: true
+  reward_type: dense
+  action_space: discrete
+  observation_space: structured
+  deterministic_tasks: true
+  deterministic_graders: true
+  num_tasks: 3
+  framework: fastapi
+  language: python
+
+deployment:
+  host: 0.0.0.0
+  port: 7860
+  dockerfile: Dockerfile
+  platform: huggingface-spaces
+  runtime: docker

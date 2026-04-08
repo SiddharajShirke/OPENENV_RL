@@ -1,0 +1,41 @@
+# Phase 3 -- Recurrent PPO (LSTM) across all tasks
+# Uses existing 28-action design.
+
+hyperparameters:
+  learning_rate: 0.0001
+  n_steps: 512
+  batch_size: 128
+  n_epochs: 10
+  gamma: 0.995
+  gae_lambda: 0.95
+  clip_range: 0.2
+  ent_coef: 0.002
+  vf_coef: 0.5
+  max_grad_norm: 0.5
+  net_arch: [256, 256]
+  lstm_hidden_size: 128
+  n_lstm_layers: 1
+  shared_lstm: false
+  enable_critic_lstm: true
+  recurrent_seq_len: 16
+
+curriculum:
+  stage1_end_frac: 0.15
+  stage2_end_frac: 0.50
+  stage3_weights: [0.15, 0.35, 0.50]
+
+training:
+  total_timesteps: 600000
+  n_envs: 4
+  seed: 42
+  warm_start_from: "results/best_model/phase2_final"
+  transfer_flat_weights: true
+  eval_task_id: "mixed_urgency_medium"
+  eval_freq: 2048
+  n_eval_episodes: 3
+
+target_scores:
+  district_backlog_easy: 0.82
+  mixed_urgency_medium: 0.75
+  cross_department_hard: 0.68
+  average: 0.82

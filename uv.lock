@@ -1,0 +1,2 @@
+# Placeholder lock file for OpenEnv validator presence check.
+# The runtime uses requirements.txt / requirements_rl.txt in this repository.

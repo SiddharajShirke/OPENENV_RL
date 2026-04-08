@@ -1,0 +1,44 @@
+# Phase 3-v2 -- Recurrent PPO (LSTM) tuned for stability and SLA reduction
+# Uses existing 28-action design.
+
+hyperparameters:
+  learning_rate: 0.00005
+  n_steps: 1024
+  batch_size: 256
+  n_epochs: 8
+  gamma: 0.995
+  gae_lambda: 0.97
+  clip_range: 0.15
+  ent_coef: 0.0005
+  vf_coef: 0.7
+  max_grad_norm: 0.5
+  net_arch: [256, 256]
+  lstm_hidden_size: 128
+  n_lstm_layers: 1
+  shared_lstm: false
+  enable_critic_lstm: true
+  recurrent_seq_len: 16
+
+curriculum:
+  stage1_end_frac: 0.25
+  stage2_end_frac: 0.70
+  stage3_weights: [0.20, 0.45, 0.35]
+
+training:
+  total_timesteps: 700000
+  n_envs: 4
+  seed: 42
+  warm_start_from: "results/best_model/phase2_final"
+  transfer_flat_weights: true
+  transfer_exclude_prefixes: ["action_net.", "value_net."]
+  hard_action_mask_train: true
+  hard_action_mask_eval: true
+  eval_task_id: "mixed_urgency_medium"
+  eval_freq: 4096
+  n_eval_episodes: 5
+
+target_scores:
+  district_backlog_easy: 0.82
+  mixed_urgency_medium: 0.75
+  cross_department_hard: 0.68
+  average: 0.75

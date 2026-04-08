@@ -3,7 +3,13 @@ from __future__ import annotations
 from pathlib import Path
 
 # Load .env file if it exists — must happen before Pydantic Settings reads env vars
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+except (ImportError, AttributeError):
+    # Keep runtime functional even when python-dotenv is not installed
+    # or when a conflicting `dotenv` package is present.
+    def load_dotenv(*args, **kwargs):  # type: ignore[no-redef]
+        return False
 _ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(dotenv_path=_ENV_FILE, override=False)
 # override=False means real environment variables always win over .env values

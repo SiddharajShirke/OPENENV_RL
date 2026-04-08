@@ -1,0 +1,23 @@
+# Phase 1 -- Masked PPO on district_backlog_easy
+hyperparameters:
+  learning_rate: 0.0003
+  n_steps: 512
+  batch_size: 64
+  n_epochs: 10
+  gamma: 0.99
+  gae_lambda: 0.95
+  clip_range: 0.2
+  ent_coef: 0.01
+  vf_coef: 0.5
+  max_grad_norm: 0.5
+  net_arch: [256, 256]
+
+training:
+  total_timesteps: 200000
+  n_envs: 4
+  seed: 42
+  eval_freq: 2048
+  n_eval_episodes: 5
+
+target_scores:
+  district_backlog_easy: 0.80
