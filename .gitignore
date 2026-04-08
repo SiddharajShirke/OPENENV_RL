@@ -33,3 +33,8 @@ test_results.txt
 test_rl_output*.txt
 tests/test_output*.txt
 tests/test_run.txt
+
+# Pre-submission validation artifacts
+scripts/validate-submission.sh
+results/prevalidation_docker_build.log
+results/prevalidation_*.log
