@@ -8,6 +8,7 @@ import sys
 import threading
 import time
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
 from uuid import uuid4
@@ -80,6 +81,7 @@ class TrainingJob:
     process_id: int | None = None
     command: list[str] = field(default_factory=list)
     output_model_path: str | None = None
+    output_model_name: str | None = None
     latest_metrics: dict[str, float] = field(default_factory=dict)
     evaluation_rows: list[dict[str, Any]] = field(default_factory=list)
     evaluation_avg_score: float | None = None
@@ -109,6 +111,7 @@ class TrainingJob:
                 "process_id": self.process_id,
                 "command": self.command,
                 "output_model_path": self.output_model_path,
+                "output_model_name": self.output_model_name,
                 "latest_metrics": dict(self.latest_metrics),
                 "evaluation_rows": list(self.evaluation_rows),
                 "evaluation_avg_score": self.evaluation_avg_score,
@@ -154,6 +157,7 @@ class TrainingJobManager:
                         process_id=int(snap["process_id"]) if snap.get("process_id") is not None else None,
                         command=list(snap.get("command") or []),
                         output_model_path=snap.get("output_model_path"),
+                        output_model_name=snap.get("output_model_name"),
                         latest_metrics=dict(snap.get("latest_metrics") or {}),
                         evaluation_rows=list(snap.get("evaluation_rows") or []),
                         evaluation_avg_score=(
@@ -177,6 +181,32 @@ class TrainingJobManager:
                         job.ended_at = _now()
                 job.process = None
                 self._jobs[job.job_id] = job
+
+    def clear_jobs(self, *, clear_artifacts: bool = False) -> int:
+        to_stop: list[subprocess.Popen[str]] = []
+        with self._lock:
+            removed = len(self._jobs)
+            for job in self._jobs.values():
+                with job.lock:
+                    proc = job.process
+                    if proc is not None and job.status in ("queued", "running"):
+                        to_stop.append(proc)
+            self._jobs.clear()
+        for proc in to_stop:
+            try:
+                proc.terminate()
+            except Exception:
+                pass
+        if self._persistence is not None and self._persistence.enabled:
+            self._persistence.clear_training_jobs()
+        if clear_artifacts:
+            try:
+                if self._training_runs_root.exists():
+                    shutil.rmtree(self._training_runs_root, ignore_errors=True)
+                self._training_runs_root.mkdir(parents=True, exist_ok=True)
+            except Exception:
+                pass
+        return removed
 
     def _persist_job(self, job: TrainingJob) -> None:
         if self._persistence is None or not self._persistence.enabled:
@@ -370,15 +400,18 @@ class TrainingJobManager:
             mirror_dir.mkdir(parents=True, exist_ok=True)
 
         if src.exists():
-            out = run_dir / src_name
+            ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+            unique_name = f"phase{job.phase}_seed{job.seed}_{ts}_{job.job_id[:8]}.zip"
+            out = run_dir / unique_name
             shutil.copy2(src, out)
             if mirror_dir != run_dir:
                 try:
-                    shutil.copy2(src, mirror_dir / src_name)
+                    shutil.copy2(src, mirror_dir / unique_name)
                 except Exception:
                     pass
             with job.lock:
                 job.output_model_path = str(out.resolve())
+                job.output_model_name = unique_name
                 job.updated_at = _now()
 
             model_type = "maskable"

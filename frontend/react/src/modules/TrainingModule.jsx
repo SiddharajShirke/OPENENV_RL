@@ -7,7 +7,6 @@ export function TrainingModule({ onStatus, onModelReady }) {
   const [timesteps, setTimesteps] = useState(120000);
   const [nEnvs, setNEnvs] = useState(4);
   const [seed, setSeed] = useState("");
-  const [configPath, setConfigPath] = useState("rl/configs/curriculum.yaml");
   const [jobs, setJobs] = useState([]);
   const [selectedJobId, setSelectedJobId] = useState("");
   const [busy, setBusy] = useState(false);
@@ -44,7 +43,7 @@ export function TrainingModule({ onStatus, onModelReady }) {
         timesteps: Number(timesteps),
         n_envs: Number(nEnvs),
         seed: seed.trim() ? Number(seed) : null,
-        config_path: configPath.trim() || null,
+        config_path: null,
       };
       const res = await api("/training/jobs", {
         method: "POST",
@@ -71,13 +70,24 @@ export function TrainingModule({ onStatus, onModelReady }) {
     }
   };
 
+  const clearTrainingHistory = async () => {
+    try {
+      const res = await api("/training/jobs", { method: "DELETE" });
+      setJobs([]);
+      setSelectedJobId("");
+      onStatus(`Training history cleared (${res.deleted_rows || 0}).`);
+    } catch (err) {
+      onStatus(err.message);
+    }
+  };
+
   useEffect(() => {
     const outputPath = selected?.output_model_path;
     if (!outputPath) return;
     if (emittedModelPathsRef.current.has(outputPath)) return;
     emittedModelPathsRef.current.add(outputPath);
-    onModelReady(outputPath, "maskable");
-  }, [selected?.output_model_path, onModelReady]);
+    onModelReady(outputPath, "maskable", selected?.output_model_name || null);
+  }, [selected?.output_model_path, selected?.output_model_name, onModelReady]);
 
   return (
     <section className="module-grid">
@@ -103,10 +113,6 @@ export function TrainingModule({ onStatus, onModelReady }) {
             Seed (optional)
             <input value={seed} onChange={(e) => setSeed(e.target.value)} placeholder="auto-random per run" />
           </label>
-          <label>
-            Config Path
-            <input value={configPath} onChange={(e) => setConfigPath(e.target.value)} />
-          </label>
         </div>
         <div className="row">
           <button onClick={startTraining} disabled={busy}>
@@ -117,6 +123,9 @@ export function TrainingModule({ onStatus, onModelReady }) {
           </button>
           <button className="ghost" onClick={() => refreshJobs(false)}>
             Refresh
+          </button>
+          <button className="ghost" onClick={clearTrainingHistory}>
+            Clear Saved History
           </button>
         </div>
       </article>
@@ -132,7 +141,7 @@ export function TrainingModule({ onStatus, onModelReady }) {
             >
               <div>
                 <strong>{job.job_id.slice(0, 8)}</strong>
-                <div className="muted">phase {job.phase} | seed {job.seed}</div>
+                <div className="muted">phase {job.phase} | seed {job.seed} | {new Date(job.created_at * 1000).toLocaleString()}</div>
               </div>
               <span className={`job-status ${job.status}`}>{job.status}</span>
             </button>
@@ -175,7 +184,7 @@ export function TrainingModule({ onStatus, onModelReady }) {
               <div className="progress-fill" style={{ width: `${Math.max(2, (selected.progress || 0) * 100)}%` }} />
             </div>
             <p className="muted">
-              Output Model: {selected.output_model_path || "pending"}
+              Output Model: {selected.output_model_name || "pending"}
             </p>
           </article>
 

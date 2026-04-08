@@ -129,6 +129,14 @@ class PersistenceStore:
                 rows.append(_from_json(str(row["payload_json"])))
         return rows
 
+    def clear_training_jobs(self) -> int:
+        if not self.enabled:
+            return 0
+        with self._lock, self._connect() as conn:
+            cur = conn.execute("DELETE FROM training_jobs")
+            conn.commit()
+            return int(cur.rowcount or 0)
+
     # Simulation runs -------------------------------------------------------
     def upsert_simulation_run(
         self,
@@ -209,6 +217,14 @@ class PersistenceStore:
             return None
         return _from_json(str(row["payload_json"]))
 
+    def clear_simulation_runs(self) -> int:
+        if not self.enabled:
+            return 0
+        with self._lock, self._connect() as conn:
+            cur = conn.execute("DELETE FROM simulation_runs")
+            conn.commit()
+            return int(cur.rowcount or 0)
+
     # Comparison runs -------------------------------------------------------
     def create_comparison_run(self, payload: dict[str, Any]) -> str | None:
         if not self.enabled:
@@ -270,3 +286,11 @@ class PersistenceStore:
         if row is None:
             return None
         return _from_json(str(row["payload_json"]))
+
+    def clear_comparison_runs(self) -> int:
+        if not self.enabled:
+            return 0
+        with self._lock, self._connect() as conn:
+            cur = conn.execute("DELETE FROM comparison_runs")
+            conn.commit()
+            return int(cur.rowcount or 0)

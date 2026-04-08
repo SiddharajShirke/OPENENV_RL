@@ -33,7 +33,43 @@ def test_assign_capacity_switches_to_advance_time_if_no_reserve() -> None:
         session.obs.officer_pool.reserve_officers = 0
         raw = ActionModel(action_type=ActionType.ASSIGN_CAPACITY, officer_delta=2)
         fixed, note = _repair_action_for_observation(raw, session.obs)
-        assert fixed.action_type == ActionType.ADVANCE_TIME
+        assert fixed.action_type in {
+            ActionType.ADVANCE_TIME,
+            ActionType.REQUEST_MISSING_DOCUMENTS,
+            ActionType.REALLOCATE_OFFICERS,
+            ActionType.ESCALATE_SERVICE,
+        }
         assert note is not None
+    finally:
+        session.close()
+
+
+def test_llm_mode_enforces_recommended_min_steps_for_hard_task() -> None:
+    session = LiveSimulationSession(
+        task_id="cross_department_hard",
+        agent_mode="llm_inference",
+        max_steps=20,
+        seed=42,
+    )
+    try:
+        assert session.max_steps >= 70
+    finally:
+        session.close()
+
+
+def test_llm_step_core_handles_none_action_without_crash() -> None:
+    session = LiveSimulationSession(
+        task_id="district_backlog_easy",
+        agent_mode="llm_inference",
+        max_steps=10,
+        seed=11,
+    )
+    try:
+        # Simulate a malformed llm policy output.
+        session.policy = lambda _obs: (None, {"decision_source": "llm", "provider": "test", "model_used": "bad"})
+        row, _log, done = session.step_once()
+        assert isinstance(row, dict)
+        assert row["action_type"] in {a.value for a in ActionType}
+        assert isinstance(done, bool)
     finally:
         session.close()

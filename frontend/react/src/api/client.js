@@ -8,6 +8,7 @@ function candidates(path) {
     path.startsWith("/simulation/") ||
     path.startsWith("/training/") ||
     path.startsWith("/rl/") ||
+    path.startsWith("/openenv/") ||
     path.startsWith("/benchmark") ||
     path.startsWith("/history/");
   if (compatNoApiPaths) {
