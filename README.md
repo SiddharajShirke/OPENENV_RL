@@ -1,18 +1,54 @@
----
-title: OPENENV_RL_08_04
-emoji: "🏛️"
-colorFrom: gray
-colorTo: blue
-sdk: docker
-app_port: 7860
-pinned: false
----
-
-# Gov Workflow OpenEnv
+﻿# Gov Workflow OpenEnv
 
 Real-world OpenEnv environment for government-service workflow optimization, with a full FastAPI bridge, RL training stack, and React operations UI.
 
-## What This Application Is
+## Deployment Branch Note
+
+The code currently deployed on Hugging Face Space is from branch `v2`.
+The deployed version reflects the branch state of `v2`.
+
+## Project Live Link
+
+Project live on: https://huggingface.co/spaces/Abhayshinde/OPENENV_RL_08_04
+
+## Pre-Submission Validation
+
+The project was validated against the required submission checks.
+
+| Check | Command / Endpoint | Result | Status |
+|---|---|---|---|
+| HF Space live check | POST https://huggingface.co/spaces/Abhayshinde/OPENENV_RL_08_04| HTTP 200 | Passed |
+| OpenEnv validation | openenv validate | [OK] OPENENV_RL: Ready for multi-mode deployment | Passed |
+| Docker build | docker build . | Building 528.4s (29/29) FINISHED | Passed |
+
+All three core pre-submission checks passed successfully.
+
+## Problem Statement
+
+District and public-service offices process high-volume citizen requests such as birth certificates, income certificates, driving licenses, passports, GST registrations, caste certificates, and land registrations. In practice, delays are often not caused by one hard technical subproblem, but by day-to-day operational decisions:
+
+- which queue should be prioritized first
+- where limited officers should be allocated
+- when missing documents should be requested
+- when escalation budget should be used
+- how to reduce backlog without creating unfair service imbalance
+
+This project turns that real administrative workflow into an agent environment. The goal is not to play a game, but to train and evaluate agents on a genuine human workflow problem: reducing avoidable administrative delay while respecting fairness and SLA constraints.
+
+## Solution Overview
+
+The solution is a typed OpenEnv-compatible environment for government workflow control.
+
+- `app/env.py` implements the core environment kernel
+- `app/models.py` defines typed observation, action, reward, and state models
+- `app/graders.py` defines deterministic task graders with bounded scores in `[0.0, 1.0]`
+- `app/reward.py` provides dense reward shaping over the full trajectory
+- `app/main.py` exposes the environment through FastAPI endpoints and serves the frontend UI
+- `baseline_openai.py` and `inference.py` provide baseline and submission-style execution paths
+
+Agents interact with the environment using operational actions such as changing priority mode, assigning or reallocating officers, requesting missing documents, escalating services, and advancing time. The environment tracks queue health, completions, SLA breaches, fairness, escalation usage, and invalid actions at every step.
+
+## Environment Description and Motivation
 
 This project simulates a real administrative workload that humans perform in district/public-service offices:
 
@@ -23,6 +59,8 @@ This project simulates a real administrative workload that humans perform in dis
 - SLA/fairness balancing
 
 Agents interact through OpenEnv-style APIs (`reset / step / state / grade`) and can be evaluated with deterministic graders.
+
+The motivation is to provide a benchmark that reflects a real service-operations problem rather than a synthetic control task. It is useful for evaluating whether an agent can make sequential workflow decisions under practical constraints.
 
 ## Current Module Architecture
 
@@ -99,6 +137,53 @@ Graders: `app/graders.py`
 - score in `[0.0, 1.0]`
 - per-task weighted criteria
 
+### Task Descriptions with Expected Difficulty
+
+#### 1. `district_backlog_easy`
+
+Expected difficulty: Easy
+
+- small district office
+- 3 services
+- lower arrival rate
+- larger SLA windows
+- lower missing-document and field-verification pressure
+
+Primary challenge:
+- basic queue prioritization
+- straightforward backlog reduction
+- simple document follow-up and staffing decisions
+
+#### 2. `mixed_urgency_medium`
+
+Expected difficulty: Medium
+
+- 4 services
+- higher arrival rate
+- mixed urgency
+- tighter fairness requirement
+- more document rework and verification pressure
+
+Primary challenge:
+- balancing urgency, throughput, and fairness
+- deciding when to request documents versus simply advancing time
+- reallocating limited officer capacity without starving lower-volume queues
+
+#### 3. `cross_department_hard`
+
+Expected difficulty: Hard
+
+- 5 services
+- highest arrival rate
+- stricter fairness threshold
+- larger operational surface area
+- more verification and coordination pressure
+
+Primary challenge:
+- managing a cross-department backlog over a longer horizon
+- preserving fairness across services while still maximizing completions
+- spending escalation budget and officer capacity carefully under sustained pressure
+
 ## Feature Modules (UI + Backend)
 
 ### 1) Overview Module
@@ -147,21 +232,34 @@ Graders: `app/graders.py`
 ### API Action Space (`ActionModel`)
 
 - `set_priority_mode`
+  - switches scheduling strategy among `urgent_first`, `oldest_first`, `balanced`, and `backlog_clearance`
 - `assign_capacity`
+  - assigns reserve officers to a service
 - `request_missing_documents`
+  - triggers document recovery for cases missing required documents in a service queue
 - `escalate_service`
+  - escalates service handling for a case/service path
 - `advance_time`
+  - processes one environment tick and advances the workflow
 - `reallocate_officers`
+  - moves officer capacity from one service to another
 
 ### API Observation Space (`ObservationModel`)
 
-- day, max days
-- priority mode
-- officer allocations + reserve
-- per-service queue snapshots
-- backlog/completed/SLA/fairness totals
-- escalation budget remaining
-- last action validity/message
+- `task_id`
+- `day`, `max_days`
+- `priority_mode`
+- `officer_pool`
+  - per-service allocations and reserve officers
+- `queue_snapshots`
+  - service-level queue state including stage counts, active cases, missing-docs cases, urgent cases, breached cases, and average age
+- `total_backlog`
+- `total_completed`
+- `total_sla_breaches`
+- `fairness_gap`
+- `escalation_budget_remaining`
+- `last_action_valid`
+- `last_action_message`
 
 ### RL Wrapper Space
 
@@ -179,8 +277,17 @@ Files:
 
 Implemented in `app/reward.py` with dense trajectory signal:
 
-- positive: progress + completion
-- penalties: waiting, SLA, fairness, invalid actions, idle capacity
+- positive:
+  - stage progress reward
+  - completion reward
+- penalties:
+  - waiting/backlog pressure
+  - new SLA breaches
+  - fairness excess beyond threshold
+  - invalid actions
+  - idle officer capacity
+
+This reward is meaningful over the full episode, not just at the end. Agents receive credit for partial operational progress and are penalized for obviously undesirable behavior.
 
 ## Baseline and Inference Programs
 
@@ -195,6 +302,30 @@ Implemented in `app/reward.py` with dense trajectory signal:
   - `[START]`
   - `[STEP]`
   - `[END]`
+
+## Baseline Scores
+
+The following baseline scores were produced by running the current root `inference.py` on this working codebase:
+
+```bash
+python inference.py
+```
+
+Observed results:
+
+| Task | Steps | Score | Success |
+|---|---:|---:|---|
+| `district_backlog_easy` | 33 | `0.67` | `true` |
+| `mixed_urgency_medium` | 61 | `0.59` | `true` |
+| `cross_department_hard` | 80 | `0.65` | `true` |
+
+These scores come from an actual run on the current project state, not placeholders.
+
+Reproducibility notes:
+
+- task seeds are fixed in `app/tasks.py` (`11`, `22`, `33`)
+- the heuristic policy baseline in `app/baselines.py` is deterministic for the same seed
+- reproducibility is also covered by `tests/test_baseline_repro.py`
 
 ## Repository Layout
 
@@ -276,6 +407,18 @@ Open:
 - UI: `http://127.0.0.1:5173/ui`
 - API docs: `http://127.0.0.1:7860/docs`
 
+### Run baseline inference
+
+```bash
+python inference.py
+```
+
+### Run heuristic policy baseline directly
+
+```bash
+python baseline_openai.py --agent heuristic --task all --verbose
+```
+
 ## Local Validation and Test Commands
 
 ```bash
@@ -343,3 +486,6 @@ Deployment checklist:
 
 BSD-3-Clause.
 
+## Team Mate
+
+https://github.com/AbhayShinde16325

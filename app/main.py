@@ -37,7 +37,7 @@ import time
 from typing import Any, Literal
 from uuid import uuid4
 
-from fastapi import APIRouter, FastAPI, HTTPException, Query, status
+from fastapi import APIRouter, Body, FastAPI, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -765,7 +765,7 @@ def health() -> HealthResponse:
     tags=["env"],
     summary="Create a new session and return the initial observation",
 )
-def reset(body: ResetRequest) -> ResetResponse:
+def reset(body: ResetRequest | None = Body(default=None)) -> ResetResponse:
     """
     Creates a fresh GovWorkflowEnv episode, registers it in the session store,
     and returns a unique session_id with the initial observation.
@@ -773,10 +773,11 @@ def reset(body: ResetRequest) -> ResetResponse:
     Use seed for reproducible episodes. Use options to override task_id
     when switching tasks within a long-running client.
     """
+    req = body or ResetRequest()
     session_id, obs, info = _sessions.create(
-        task_id=body.task_id,
-        seed=body.seed,
-        options=body.options,
+        task_id=req.task_id,
+        seed=req.seed,
+        options=req.options,
     )
     return ResetResponse(session_id=session_id, observation=obs, info=info)
 
@@ -943,7 +944,7 @@ def api_agents() -> list[str]:
 
 
 @api.post("/reset", response_model=ResetResponse, summary="Reset episode (frontend alias)")
-def api_reset(body: ResetRequest) -> ResetResponse:
+def api_reset(body: ResetRequest | None = Body(default=None)) -> ResetResponse:
     return reset(body)
 
 
