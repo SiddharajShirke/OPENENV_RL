@@ -9,7 +9,7 @@ The deployed version reflects the branch state of `v2`.
 
 ## Project Live Link
 
-Project live on: https://huggingface.co/spaces/Otter21/OPENENV_RL_01
+Project live on: https://huggingface.co/spaces/Abhayshinde/OPENENV_RL_08_04
 
 ## Pre-Submission Validation
 
@@ -17,7 +17,7 @@ The project was validated against the required submission checks.
 
 | Check | Command / Endpoint | Result | Status |
 |---|---|---|---|
-| HF Space live check | POST https://huggingface.co/spaces/Otter21/OPENENV_RL_01| HTTP 200 | Passed |
+| HF Space live check | POST https://huggingface.co/spaces/Abhayshinde/OPENENV_RL_08_04| HTTP 200 | Passed |
 | OpenEnv validation | openenv validate | [OK] OPENENV_RL: Ready for multi-mode deployment | Passed |
 | Docker build | docker build . | Building 528.4s (29/29) FINISHED | Passed |
 
