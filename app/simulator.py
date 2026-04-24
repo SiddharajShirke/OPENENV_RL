@@ -13,8 +13,18 @@ from app.baselines import POLICIES, backlog_clearance_policy
 from app.env import GovWorkflowEnv
 from app.graders import grade_episode
 from app.models import ActionModel, ActionType, ObservationModel, PriorityMode, ServiceType
+from app.engine import DayResult, DaySimulator
 
+from enum import Enum
 SimulationAgentMode = Literal["baseline_policy", "llm_inference", "trained_rl"]
+
+class SimulationAgentModeEnum(str, Enum):
+    baseline_policy = "baseline_policy"
+    llm_inference = "llm_inference"
+    trained_rl = "trained_rl"
+
+SimulationAgentMode = SimulationAgentModeEnum
+
 
 LEGACY_NVIDIA_MODEL_POOL = [
     "meta/llama-3.3-70b-instruct",
