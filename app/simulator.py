@@ -94,6 +94,45 @@ def _extract_json_object(text: str) -> dict[str, Any] | None:
 def _coerce_action(payload: dict[str, Any] | None) -> ActionModel:
     if not payload:
         return ActionModel(action_type=ActionType.ADVANCE_TIME)
+    try:
+        # Remap legacy Phase 1 field names to Phase 2
+        remapped = dict(payload)
+        if "service" in remapped and "service_target" not in remapped:
+            remapped["service_target"] = remapped.pop("service")
+        if "target_service" in remapped:
+            src = remapped.pop("service_target", None)
+            tgt = remapped.pop("target_service", None)
+            delta = remapped.pop("officer_delta", 1)
+            remapped["reallocation_delta"] = {
+                (src.value if hasattr(src, 'value') else str(src)): -int(delta),
+                (tgt.value if hasattr(tgt, 'value') else str(tgt)): int(delta),
+            } if src and tgt else None
+        if "officer_delta" in remapped and "capacity_assignment" not in remapped:
+            svc = remapped.get("service_target")
+            if svc:
+                svc_key = svc.value if hasattr(svc, 'value') else str(svc)
+                remapped["capacity_assignment"] = {svc_key: int(remapped.pop("officer_delta"))}
+            else:
+                remapped.pop("officer_delta", None)
+        if "case_id" in remapped:
+            remapped.pop("case_id", None)
+        return ActionModel(**remapped)
+    except Exception:
+        return ActionModel(action_type=ActionType.ADVANCE_TIME)
+
+
+def _queue_rows(obs: ObservationModel) -> list[dict[str, Any]]:
+    return [
+        {
+            "service": q.service_type.value,
+            "active_cases": q.total_pending,
+            "missing_docs_cases": q.blocked_missing_docs,
+            "urgent_cases": q.urgent_pending,
+            "breached_cases": q.total_sla_breached,
+            "avg_age_days": q.avg_waiting_days,
+        }
+        for q in obs.queue_snapshots.values()
+    ]
 
 
 def _recommended_min_steps(task_id: str) -> int:
@@ -102,30 +141,15 @@ def _recommended_min_steps(task_id: str) -> int:
     if task_id == "mixed_urgency_medium":
         return 60
     return 40
-    try:
-        return ActionModel(**payload)
-    except Exception:
-        return ActionModel(action_type=ActionType.ADVANCE_TIME)
-
-
-def _queue_rows(obs: ObservationModel) -> list[dict[str, Any]]:
-    return [
-        {
-            "service": q.service.value,
-            "active_cases": q.active_cases,
-            "missing_docs_cases": q.missing_docs_cases,
-            "urgent_cases": q.urgent_cases,
-            "breached_cases": q.breached_cases,
-            "avg_age_days": q.avg_age_days,
-        }
-        for q in obs.queue_snapshots
-    ]
 
 
 def _alloc_for(obs: ObservationModel, service: ServiceType) -> int:
-    raw = obs.officer_pool.allocations.get(service)
+    pool = obs.officer_pool
+    # Phase 2 uses 'allocated'; Phase 1 used 'allocations'
+    alloc_dict = getattr(pool, "allocated", None) or getattr(pool, "allocations", {})
+    raw = alloc_dict.get(service)
     if raw is None:
-        raw = obs.officer_pool.allocations.get(service.value, 0)
+        raw = alloc_dict.get(service.value if hasattr(service, 'value') else str(service), 0)
     return int(raw or 0)
 
 
@@ -134,40 +158,76 @@ def _top_backlog_service(
     *,
     exclude: ServiceType | None = None,
 ) -> ServiceType | None:
-    ranked = [q for q in obs.queue_snapshots if q.service != exclude]
+    qs = obs.queue_snapshots
+    snapshots = list(qs.values()) if isinstance(qs, dict) else list(qs)
+    ranked = [q for q in snapshots if getattr(q, 'service_type', getattr(q, 'service', None)) != exclude]
     if not ranked:
         return None
     ranked.sort(
-        key=lambda q: (q.active_cases + (2 * q.breached_cases) + q.urgent_cases, q.avg_age_days),
+        key=lambda q: (
+            getattr(q, 'total_pending', getattr(q, 'active_cases', 0))
+            + 2 * getattr(q, 'total_sla_breached', getattr(q, 'breached_cases', 0))
+            + getattr(q, 'urgent_pending', getattr(q, 'urgent_cases', 0)),
+            getattr(q, 'avg_waiting_days', getattr(q, 'avg_age_days', 0)),
+        ),
         reverse=True,
     )
-    return ranked[0].service
+    return getattr(ranked[0], 'service_type', getattr(ranked[0], 'service', None))
 
 
 def _service_with_missing_docs(obs: ObservationModel) -> ServiceType | None:
-    candidates = [q for q in obs.queue_snapshots if q.missing_docs_cases > 0]
+    qs = obs.queue_snapshots
+    snapshots = list(qs.values()) if isinstance(qs, dict) else list(qs)
+    candidates = [
+        q for q in snapshots
+        if getattr(q, 'blocked_missing_docs', getattr(q, 'missing_docs_cases', 0)) > 0
+    ]
     if not candidates:
         return None
-    candidates.sort(key=lambda q: (q.missing_docs_cases, q.active_cases), reverse=True)
-    return candidates[0].service
+    candidates.sort(
+        key=lambda q: (
+            getattr(q, 'blocked_missing_docs', getattr(q, 'missing_docs_cases', 0)),
+            getattr(q, 'total_pending', getattr(q, 'active_cases', 0)),
+        ),
+        reverse=True,
+    )
+    return getattr(candidates[0], 'service_type', getattr(candidates[0], 'service', None))
 
 
 def _service_with_officers(obs: ObservationModel) -> ServiceType | None:
-    services = [q.service for q in obs.queue_snapshots]
+    qs = obs.queue_snapshots
+    snapshots = list(qs.values()) if isinstance(qs, dict) else list(qs)
+    services = [
+        getattr(q, 'service_type', getattr(q, 'service', None))
+        for q in snapshots
+    ]
     services.sort(key=lambda s: _alloc_for(obs, s), reverse=True)
     for service in services:
-        if _alloc_for(obs, service) > 0:
+        if service and _alloc_for(obs, service) > 0:
             return service
     return None
 
 
 def _compute_action_mask(obs: ObservationModel) -> dict[ActionType, bool]:
-    has_reserve = int(obs.officer_pool.reserve_officers) > 0
-    has_missing = any(q.missing_docs_cases > 0 for q in obs.queue_snapshots)
-    has_backlog = any(q.active_cases > 0 for q in obs.queue_snapshots)
+    pool = obs.officer_pool
+    has_reserve = int(getattr(pool, 'idle_officers', getattr(pool, 'reserve_officers', 0))) > 0
+    qs = obs.queue_snapshots
+    snapshots = list(qs.values()) if isinstance(qs, dict) else list(qs)
+    has_missing = any(
+        getattr(q, 'blocked_missing_docs', getattr(q, 'missing_docs_cases', 0)) > 0
+        for q in snapshots
+    )
+    has_backlog = any(
+        getattr(q, 'total_pending', getattr(q, 'active_cases', 0)) > 0
+        for q in snapshots
+    )
     has_budget = int(obs.escalation_budget_remaining) > 0
-    staffed_services = [q.service for q in obs.queue_snapshots if _alloc_for(obs, q.service) > 0]
-    can_reallocate = len(staffed_services) >= 1 and len(obs.queue_snapshots) >= 2
+    staffed_services = [
+        getattr(q, 'service_type', getattr(q, 'service', None))
+        for q in snapshots
+        if _alloc_for(obs, getattr(q, 'service_type', getattr(q, 'service', None))) > 0
+    ]
+    can_reallocate = len(staffed_services) >= 1 and len(snapshots) >= 2
     return {
         ActionType.SET_PRIORITY_MODE: True,
         ActionType.ADVANCE_TIME: True,
@@ -189,7 +249,7 @@ def _best_high_impact_action(obs: ObservationModel) -> tuple[ActionModel, str]:
     top_backlog = _top_backlog_service(obs)
     top_missing = _service_with_missing_docs(obs)
 
-    if int(obs.officer_pool.reserve_officers) > 0 and top_backlog is not None:
+    if int(obs.officer_pool.idle_officers) > 0 and top_backlog is not None:
         return (
             ActionModel(action_type=ActionType.ASSIGN_CAPACITY, service=top_backlog, officer_delta=1),
             "high-impact: assign reserve capacity to top backlog service",
@@ -202,14 +262,24 @@ def _best_high_impact_action(obs: ObservationModel) -> tuple[ActionModel, str]:
         )
 
     if int(obs.escalation_budget_remaining) > 0:
+        qs = obs.queue_snapshots
+        snapshots = list(qs.values()) if isinstance(qs, dict) else list(qs)
         hot = sorted(
-            obs.queue_snapshots,
-            key=lambda q: (q.breached_cases, q.active_cases, q.urgent_cases),
+            snapshots,
+            key=lambda q: (
+                getattr(q, 'total_sla_breached', getattr(q, 'breached_cases', 0)),
+                getattr(q, 'total_pending', getattr(q, 'active_cases', 0)),
+                getattr(q, 'urgent_pending', getattr(q, 'urgent_cases', 0)),
+            ),
             reverse=True,
         )
-        if hot and (hot[0].breached_cases > 0 or hot[0].active_cases > 0):
+        if hot and (
+            getattr(hot[0], 'total_sla_breached', getattr(hot[0], 'breached_cases', 0)) > 0
+            or getattr(hot[0], 'total_pending', getattr(hot[0], 'active_cases', 0)) > 0
+        ):
+            svc = getattr(hot[0], 'service_type', getattr(hot[0], 'service', None))
             return (
-                ActionModel(action_type=ActionType.ESCALATE_SERVICE, service=hot[0].service),
+                ActionModel(action_type=ActionType.ESCALATE_SERVICE, escalation_target=svc),
                 "high-impact: escalate highest SLA-risk service",
             )
 
@@ -220,9 +290,8 @@ def _best_high_impact_action(obs: ObservationModel) -> tuple[ActionModel, str]:
             return (
                 ActionModel(
                     action_type=ActionType.REALLOCATE_OFFICERS,
-                    service=source,
-                    target_service=target,
-                    officer_delta=1,
+                    service_target=source,
+                    reallocation_delta={source.value: -1, target.value: 1},
                 ),
                 "high-impact: reallocate one officer toward highest backlog",
             )
@@ -253,32 +322,34 @@ def _repair_action_for_observation(
         return action, None
 
     if at == ActionType.ASSIGN_CAPACITY:
-        reserve = int(obs.officer_pool.reserve_officers)
+        pool = obs.officer_pool
+        reserve = int(getattr(pool, 'idle_officers', getattr(pool, 'reserve_officers', 0)))
         if reserve <= 0:
             fallback, why = _best_high_impact_action(obs)
             return fallback, f"reserve officers exhausted; {why}"
-        service = action.service or _top_backlog_service(obs)
+        service = getattr(action, 'service_target', None) or getattr(action, 'service', None) or _top_backlog_service(obs)
         if service is None:
             fallback, why = _best_high_impact_action(obs)
             return fallback, f"no service available for assign_capacity; {why}"
-        delta = int(action.officer_delta) if int(action.officer_delta) > 0 else 1
-        delta = min(delta, reserve)
+        cap = action.capacity_assignment or {}
+        delta = cap.get(service.value, cap.get(str(service), 1))
+        delta = max(1, min(int(delta), reserve))
         repaired = ActionModel(
             action_type=ActionType.ASSIGN_CAPACITY,
-            service=service,
-            officer_delta=delta,
+            service_target=service,
+            capacity_assignment={service.value: delta},
         )
         note = None if repaired.model_dump(exclude_none=True) == action.model_dump(exclude_none=True) else "repaired assign_capacity payload"
         return repaired, note
 
     if at == ActionType.REQUEST_MISSING_DOCUMENTS:
-        service = action.service or _service_with_missing_docs(obs)
+        service = getattr(action, 'service_target', None) or getattr(action, 'service', None) or _service_with_missing_docs(obs)
         if service is None:
             fallback, why = _best_high_impact_action(obs)
             return fallback, f"no missing-doc queue available; {why}"
         repaired = ActionModel(
             action_type=ActionType.REQUEST_MISSING_DOCUMENTS,
-            service=service,
+            service_target=service,
         )
         note = None if repaired.model_dump(exclude_none=True) == action.model_dump(exclude_none=True) else "repaired request_missing_documents payload"
         return repaired, note
@@ -287,20 +358,28 @@ def _repair_action_for_observation(
         if int(obs.escalation_budget_remaining) <= 0:
             fallback, why = _best_high_impact_action(obs)
             return fallback, f"escalation budget exhausted; {why}"
-        service = action.service or _top_backlog_service(obs)
-        if service is None and action.case_id is None:
+        service = (
+            getattr(action, 'escalation_target', None)
+            or getattr(action, 'service_target', None)
+            or getattr(action, 'service', None)
+            or _top_backlog_service(obs)
+        )
+        if service is None:
             fallback, why = _best_high_impact_action(obs)
             return fallback, f"no escalation target available; {why}"
         repaired = ActionModel(
             action_type=ActionType.ESCALATE_SERVICE,
-            service=service,
-            case_id=action.case_id,
+            escalation_target=service,
         )
         note = None if repaired.model_dump(exclude_none=True) == action.model_dump(exclude_none=True) else "repaired escalate_service payload"
         return repaired, note
 
     if at == ActionType.REALLOCATE_OFFICERS:
-        source = action.service or _service_with_officers(obs)
+        source = (
+            getattr(action, 'service_target', None)
+            or getattr(action, 'service', None)
+            or _service_with_officers(obs)
+        )
         if source is None:
             fallback, why = _best_high_impact_action(obs)
             return fallback, f"no staffed source service; {why}"
@@ -312,20 +391,29 @@ def _repair_action_for_observation(
             fallback, why = _best_high_impact_action(obs)
             return fallback, f"insufficient source officers; {why}"
 
-        target = action.target_service
+        # Phase 2: target comes from reallocation_delta; Phase 1 from target_service
+        rdelta = action.reallocation_delta or {}
+        target = None
+        for k, v in rdelta.items():
+            if v > 0:
+                try:
+                    target = ServiceType(k)
+                except Exception:
+                    pass
+                break
+        if target is None:
+            target = getattr(action, 'target_service', None)
         if target is None or target == source:
             target = _top_backlog_service(obs, exclude=source)
         if target is None or target == source:
             fallback, why = _best_high_impact_action(obs)
             return fallback, f"missing distinct target_service; {why}"
 
-        delta = int(action.officer_delta) if int(action.officer_delta) > 0 else 1
-        delta = max(1, min(delta, source_alloc))
+        delta = max(1, min(abs(rdelta.get(source.value, 1)), source_alloc))
         repaired = ActionModel(
             action_type=ActionType.REALLOCATE_OFFICERS,
-            service=source,
-            target_service=target,
-            officer_delta=delta,
+            service_target=source,
+            reallocation_delta={source.value: -delta, target.value: delta},
         )
         note = None if repaired.model_dump(exclude_none=True) == action.model_dump(exclude_none=True) else "repaired reallocate_officers payload"
         return repaired, note
@@ -764,6 +852,11 @@ class LiveSimulationSession:
 
         self.obs, reward, terminated, truncated, info = self.env.step(action)
         done = bool(terminated or truncated)
+        # Read observation fields safely for both Phase 1 and Phase 2 model shapes
+        fairness_gap = float(
+            getattr(self.obs, 'fairness_gap',
+                    1.0 - getattr(self.obs, 'fairness_index', 1.0))
+        )
         row = {
             "step": self.step_idx,
             "day": self.obs.day,
@@ -774,10 +867,10 @@ class LiveSimulationSession:
             "backlog": self.obs.total_backlog,
             "completed": self.obs.total_completed,
             "sla_breaches": self.obs.total_sla_breaches,
-            "fairness_gap": float(self.obs.fairness_gap),
+            "fairness_gap": fairness_gap,
             "escalation_budget_remaining": self.obs.escalation_budget_remaining,
-            "invalid_action": bool(info.invalid_action),
-            "last_action_error": info.last_action_error,
+            "invalid_action": bool(getattr(info, 'invalid_action', False)),
+            "last_action_error": getattr(info, 'last_action_error', None),
             "queue_rows": _queue_rows(self.obs),
         }
         row.update(meta)

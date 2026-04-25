@@ -1415,7 +1415,7 @@ def api_simulation_live_start(body: SimulationLiveStartRequest) -> SimulationLiv
         agent_mode=run.agent_mode,
         seed=run.seed,
         max_steps=run.max_steps,
-        start_log=run.start_line,
+        start_log=run.start_line(),
         route_plan=list(run.llm_route),
     )
 
@@ -1449,7 +1449,7 @@ def api_simulation_live_step(body: SimulationLiveStepRequest) -> SimulationLiveS
             score=run.score,
             grader_name=run.grader_name,
             summary=run.summary,
-            end_log=run.end_line,
+            end_log=run.end_line(),
         )
     try:
         row, step_log, done = run.step_once()
@@ -1483,7 +1483,7 @@ def api_simulation_live_step(body: SimulationLiveStepRequest) -> SimulationLiveS
         done=done,
         step=SimulationStep(**row),
         step_log=step_log,
-        end_log=run.end_line if done else None,
+        end_log=run.end_line() if done else None,
         total_reward=float(run.total_reward),
         score=run.score,
         grader_name=run.grader_name,
