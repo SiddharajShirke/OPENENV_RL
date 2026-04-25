@@ -9,6 +9,7 @@ not provide MaskableRecurrentPPO, we enforce action masks in two places:
 
 Usage:
     python -m rl.train_recurrent --timesteps 600000
+    python -m rl.train_recurrent --task cross_department_hard --n_envs 4
 """
 
 from __future__ import annotations
@@ -83,6 +84,7 @@ def train_phase3(
     n_envs: int = 4,
     seed: int = 42,
     config_path: str = "rl/configs/recurrent.yaml",
+    eval_task_id_override: str | None = None,
 ) -> RecurrentPPO:
     cfg = _load_cfg(config_path)
     hp = cfg.get("hyperparameters", {})
@@ -120,7 +122,7 @@ def train_phase3(
 
     train_env = DummyVecEnv([_make_curr(i) for i in range(n_envs)])
 
-    eval_task_id = str(tr_c.get("eval_task_id", "mixed_urgency_medium"))
+    eval_task_id = str(eval_task_id_override or tr_c.get("eval_task_id", "mixed_urgency_medium"))
     eval_env = GovWorkflowGymEnv(eval_task_id, seed=seed + 999, hard_action_mask=hard_action_mask_eval)
 
     eval_cb = RecurrentEvalCallback(
@@ -189,9 +191,15 @@ def train_phase3(
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--timesteps", type=int, default=600_000)
-    parser.add_argument("--n-envs", type=int, default=4)
+    parser.add_argument("--n-envs", "--n_envs", dest="n_envs", type=int, default=4)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--config", default="rl/configs/recurrent.yaml")
+    parser.add_argument(
+        "--task",
+        default=None,
+        choices=["district_backlog_easy", "mixed_urgency_medium", "cross_department_hard"],
+        help="Compatibility alias for evaluation task used by recurrent eval callback.",
+    )
     args = parser.parse_args()
 
     train_phase3(
@@ -199,6 +207,7 @@ def main() -> None:
         n_envs=args.n_envs,
         seed=args.seed,
         config_path=args.config,
+        eval_task_id_override=args.task,
     )
 
 

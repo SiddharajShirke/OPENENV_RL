@@ -209,6 +209,12 @@ def compare_recurrent_vs_flat(
 def main() -> None:
     parser = argparse.ArgumentParser(description="Evaluate a trained PPO model")
     parser.add_argument("--model", required=True)
+    parser.add_argument(
+        "--task",
+        default=None,
+        choices=TASK_IDS,
+        help="Single-task alias. If set, overrides --tasks.",
+    )
     parser.add_argument("--tasks", nargs="+", default=TASK_IDS)
     parser.add_argument("--episodes", type=int, default=1)
     parser.add_argument("--output", default=None)
@@ -220,9 +226,10 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    selected_tasks = [args.task] if args.task else args.tasks
     results = evaluate_model(
         args.model,
-        task_ids=args.tasks,
+        task_ids=selected_tasks,
         n_episodes=args.episodes,
         model_type=args.model_type,
     )

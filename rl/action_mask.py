@@ -24,27 +24,39 @@ class ActionMaskComputer:
         current_priority_mode: str = "balanced",
     ) -> np.ndarray:
         mask = np.ones(N_ACTIONS, dtype=bool)
+        total_backlog = int(getattr(obs, "total_backlog", 0) or 0)
+
+        # Prevent reward farming with no-op control actions when nothing is queued.
+        # In this state, time must advance to generate arrivals and meaningful decisions.
+        if total_backlog <= 0:
+            mask[:] = False
+            for action_idx, (action_type, _service, _pm, _delta) in ACTION_DECODE_TABLE.items():
+                if action_type == "advance_time":
+                    mask[action_idx] = True
+                    break
+            return mask
 
         queue_snaps = obs.queue_snapshots.values() if isinstance(obs.queue_snapshots, dict) else obs.queue_snapshots
+        queue_snaps = list(queue_snaps)
         snapshots = {
             (snap.service_type.value if hasattr(snap.service_type, "value") else snap.service_type): snap 
             for snap in queue_snaps
         }
         active_services = {
             service for service, snap in snapshots.items()
-            if getattr(snap, "active_cases", getattr(snap, "total_pending", 0)) > 0
+            if getattr(snap, "total_pending", getattr(snap, "active_cases", 0)) > 0
         }
         escalation_budget = obs.escalation_budget_remaining
 
         services_with_missing_docs = {
             (snap.service_type.value if hasattr(snap.service_type, "value") else snap.service_type) 
             for snap in queue_snaps
-            if getattr(snap, "missing_docs_cases", getattr(snap, "blocked_missing_docs", 0)) > 0
+            if getattr(snap, "blocked_missing_docs", getattr(snap, "missing_docs_cases", 0)) > 0
         }
         services_with_escalatable = {
             (snap.service_type.value if hasattr(snap.service_type, "value") else snap.service_type)
             for snap in queue_snaps
-            if (getattr(snap, "active_cases", getattr(snap, "total_pending", 0)) - getattr(snap, "escalated_cases", getattr(snap, "urgent_pending", 0))) > 0
+            if (getattr(snap, "total_pending", getattr(snap, "active_cases", 0)) - getattr(snap, "urgent_pending", getattr(snap, "escalated_cases", 0))) > 0
         }
 
         allocations = {}

@@ -21,8 +21,6 @@ def _service_with_max(attr: str, obs: ObservationModel) -> ServiceType | None:
 
 
 def greedy_sla_policy(obs: ObservationModel) -> ActionModel:
-    if getattr(obs, "priority_mode", None) != PriorityMode.URGENT_FIRST:
-        return ActionModel(action_type=ActionType.SET_PRIORITY_MODE, priority_mode=PriorityMode.URGENT_FIRST)
     target = _service_with_max("blocked_missing_docs", obs)
     if target:
         return ActionModel(action_type=ActionType.REQUEST_MISSING_DOCUMENTS, service_target=target)
@@ -30,14 +28,10 @@ def greedy_sla_policy(obs: ObservationModel) -> ActionModel:
 
 
 def oldest_first_policy(obs: ObservationModel) -> ActionModel:
-    if getattr(obs, "priority_mode", None) != PriorityMode.OLDEST_FIRST:
-        return ActionModel(action_type=ActionType.SET_PRIORITY_MODE, priority_mode=PriorityMode.OLDEST_FIRST)
     return ActionModel(action_type=ActionType.ADVANCE_TIME)
 
 
 def backlog_clearance_policy(obs: ObservationModel) -> ActionModel:
-    if getattr(obs, "priority_mode", None) != PriorityMode.BACKLOG_CLEARANCE:
-        return ActionModel(action_type=ActionType.SET_PRIORITY_MODE, priority_mode=PriorityMode.BACKLOG_CLEARANCE)
     idle_officers = getattr(obs.officer_pool, "idle_officers", getattr(obs.officer_pool, "reserve_officers", 0))
     if idle_officers > 0:
         target = _service_with_max("total_pending", obs)

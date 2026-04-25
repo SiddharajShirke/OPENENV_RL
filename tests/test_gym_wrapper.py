@@ -86,3 +86,17 @@ def test_hard_mask_invalid_action_falls_back_to_advance_time():
     _, _, _, _, info = env.step(-1)
     assert info["action_mask_applied"] is True
     assert info["executed_action_idx"] == 18
+
+
+def test_non_advance_streak_forces_advance_time_only():
+    env = GovWorkflowGymEnv(task_id="district_backlog_easy", seed=42, max_non_advance_streak=2)
+    env.reset(seed=42)
+    env.step(18)  # advance one day so backlog appears
+
+    # Two non-advance control actions reach the streak limit.
+    env.step(3)
+    env.step(2)
+    masks = env.action_masks()
+
+    assert masks[18]
+    assert int(masks.sum()) == 1

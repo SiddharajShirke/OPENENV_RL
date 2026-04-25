@@ -1,0 +1,37 @@
+# Phase 1 -- Aggressive PPO tuning (benchmark unchanged)
+# Use when baseline Phase 1 plateaus around ~0.55-0.58 grader score.
+#
+# Example:
+#   python -m rl.train_ppo --phase 1 --task district_backlog_easy --timesteps 300000 --n_envs 4 --seed 42 --phase1-config rl/configs/ppo_easy_aggressive.yaml
+#
+# Notes:
+# - Keeps env/grader/task unchanged.
+# - Focuses on longer-horizon credit assignment + lower exploration noise.
+
+hyperparameters:
+  learning_rate: 0.0001
+  n_steps: 1024
+  batch_size: 256
+  n_epochs: 15
+  gamma: 0.995
+  gae_lambda: 0.98
+  clip_range: 0.15
+  ent_coef: 0.001
+  vf_coef: 0.7
+  max_grad_norm: 0.5
+  net_arch: [256, 256, 128]
+
+training:
+  total_timesteps: 300000
+  n_envs: 4
+  seed: 42
+  eval_freq: 16384
+  n_eval_episodes: 3
+  grader_eval_freq_multiplier: 2
+  enable_eval_callback: true
+  progress_bar: false
+  model_verbose: 0
+  callback_verbose: 0
+
+target_scores:
+  district_backlog_easy: 0.65

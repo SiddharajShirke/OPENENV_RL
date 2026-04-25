@@ -34,3 +34,24 @@ def test_reset_is_deterministic():
     d_a.pop("episode_id", None); d_b.pop("episode_id", None)
     d_a.pop("last_action_message", None); d_b.pop("last_action_message", None)
     assert d_a == d_b
+
+
+def test_episode_truncates_on_step_cap_without_advancing_time():
+    env = GovWorkflowEnv("district_backlog_easy")
+    env.reset(seed=123, options={"max_steps_per_episode": 5})
+
+    done = False
+    for _ in range(6):
+        _, _, terminated, truncated, _ = env.step(
+            ActionModel(
+                action_type=ActionType.SET_PRIORITY_MODE,
+                priority_mode=PriorityMode.BALANCED,
+            )
+        )
+        done = bool(terminated or truncated)
+        if done:
+            break
+
+    assert done is True
+    assert env.truncated is True
+    assert env.total_steps == 5

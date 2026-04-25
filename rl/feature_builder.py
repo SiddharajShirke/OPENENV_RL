@@ -99,12 +99,12 @@ class FeatureBuilder:
                 offset += PER_SERVICE_DIM
                 continue
 
-            total_in_svc = max(getattr(snap, "active_cases", getattr(snap, "total_pending", 0)), 1) # instead of queue_length
+            total_in_svc = max(getattr(snap, "total_pending", getattr(snap, "active_cases", 0)), 1)
 
-            features[offset + 0] = getattr(snap, "active_cases", getattr(snap, "total_pending", 0)) / _MAX_QUEUE
+            features[offset + 0] = getattr(snap, "total_pending", getattr(snap, "active_cases", 0)) / _MAX_QUEUE
             features[offset + 1] = getattr(snap, "avg_age_days", getattr(snap, "avg_waiting_days", getattr(snap, "oldest_case_age_days", 0))) / _MAX_WAIT
             features[offset + 2] = getattr(snap, "urgent_cases", getattr(snap, "urgent_pending", 0)) / _MAX_URGENT
-            features[offset + 3] = getattr(snap, "missing_docs_cases", getattr(snap, "blocked_missing_docs", 0)) / _MAX_MISSING
+            features[offset + 3] = getattr(snap, "blocked_missing_docs", getattr(snap, "missing_docs_cases", 0)) / _MAX_MISSING
 
             # Stage distribution as fractions
             stage_counts = getattr(snap, "stage_counts", getattr(snap, "public_stage_counts", {})) or {}

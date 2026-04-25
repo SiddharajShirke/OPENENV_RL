@@ -30,6 +30,8 @@ class GovWorkflowEvalCallback(MaskableEvalCallback):
         eval_env:             GovWorkflowGymEnv,
         eval_freq:            int = 2048,
         n_eval_episodes:      int = 5,
+        grader_eval_freq_multiplier: int = 4,
+        grader_eval_max_steps: int | None = None,
         best_model_save_path: str = "results/best_model",
         log_path:             str = "results/eval_logs",
         task_id:              str = "district_backlog_easy",
@@ -45,13 +47,16 @@ class GovWorkflowEvalCallback(MaskableEvalCallback):
             warn=False,
         )
         self.task_id = task_id
+        self.grader_eval_freq_multiplier = max(1, int(grader_eval_freq_multiplier))
+        self.grader_eval_max_steps = grader_eval_max_steps
         self._best_grader_score = -np.inf
         os.makedirs(best_model_save_path, exist_ok=True)
         os.makedirs(log_path, exist_ok=True)
 
     def _on_step(self) -> bool:
         result = super()._on_step()
-        if self.eval_freq > 0 and self.n_calls % self.eval_freq == 0:
+        grader_eval_freq = max(self.eval_freq * self.grader_eval_freq_multiplier, 1)
+        if self.eval_freq > 0 and self.n_calls % grader_eval_freq == 0:
             grader_score = self._run_grader_eval()
             if self.logger:
                 self.logger.record("eval/grader_score", grader_score)
@@ -72,14 +77,23 @@ class GovWorkflowEvalCallback(MaskableEvalCallback):
             task_cfg = TASKS.get(self.task_id)
             if task_cfg is None:
                 return 0.0
-            env = GovWorkflowGymEnv(task_id=self.task_id, seed=task_cfg.seed)
+            max_steps = (
+                int(self.grader_eval_max_steps)
+                if self.grader_eval_max_steps is not None
+                else max(1, int(task_cfg.max_days) * 10)
+            )
+            env = GovWorkflowGymEnv(task_id=self.task_id, seed=task_cfg.seed, hard_action_mask=True)
             obs, _ = env.reset()
             done = False
+            steps = 0
             while not done:
-                masks = env.action_masks()
+                masks = np.asarray(env.action_masks(), dtype=bool).reshape(-1)
                 action, _ = self.model.predict(obs, action_masks=masks, deterministic=True)
                 obs, _, terminated, truncated, _ = env.step(int(action))
                 done = terminated or truncated
+                steps += 1
+                if steps >= max_steps and not done:
+                    break
             result = grade_episode(env._core_env.state())
             return float(result.score)
         except Exception as e:

@@ -115,3 +115,11 @@ def test_mask_length(amc):
 
 def test_at_least_one_valid_action(amc):
     assert amc.compute(_make_obs(), "balanced").any()
+
+
+def test_only_advance_time_when_backlog_zero(amc):
+    obs = _make_obs(active_cases_by_service={svc.value: 0 for svc in ServiceType})
+    obs.total_backlog = 0
+    mask = amc.compute(obs, "balanced")
+    assert mask[18]
+    assert int(mask.sum()) == 1

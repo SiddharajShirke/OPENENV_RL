@@ -29,6 +29,7 @@ class GovWorkflowGymEnv(gym.Env):
         task_id: str = "district_backlog_easy",
         seed: int = 42,
         hard_action_mask: bool = False,
+        max_non_advance_streak: int = 3,
     ):
         super().__init__()
         self.task_id = task_id
@@ -36,6 +37,8 @@ class GovWorkflowGymEnv(gym.Env):
         self._task_sampler: Optional[Callable[[], str]] = None
         self._global_step_counter: Optional[list[int]] = None
         self._hard_action_mask: bool = bool(hard_action_mask)
+        self._max_non_advance_streak = max(0, int(max_non_advance_streak))
+        self._non_advance_streak = 0
 
         self._core_env = GovWorkflowEnv()
         self._fb = FeatureBuilder()
@@ -87,6 +90,7 @@ class GovWorkflowGymEnv(gym.Env):
         self._current_obs = obs_model
         self._current_pm = "balanced"
         self._last_at = "advance_time"
+        self._non_advance_streak = 0
 
         info_dict = info.model_dump() if hasattr(info, "model_dump") else info
         if not isinstance(info_dict, dict):
@@ -95,9 +99,7 @@ class GovWorkflowGymEnv(gym.Env):
             except (TypeError, ValueError):
                 info_dict = {}
 
-        info_dict["fairness_gap"] = float(
-            getattr(obs_model, "fairness_gap", getattr(obs_model, "fairness_index", 0.0)) or 0.0
-        )
+        info_dict["fairness_gap"] = self._obs_fairness_gap(obs_model)
         return self._to_array(obs_model), info_dict
 
     def step(self, action: int) -> tuple[np.ndarray, float, bool, bool, dict]:
@@ -117,6 +119,10 @@ class GovWorkflowGymEnv(gym.Env):
         self._last_at = action_model.action_type.value
         if getattr(action_model, "priority_mode", None) is not None:
             self._current_pm = action_model.priority_mode.value
+        if action_model.action_type == ActionType.ADVANCE_TIME:
+            self._non_advance_streak = 0
+        else:
+            self._non_advance_streak += 1
 
         info_dict = info.model_dump() if hasattr(info, "model_dump") else info
         if not isinstance(info_dict, dict):
@@ -125,9 +131,7 @@ class GovWorkflowGymEnv(gym.Env):
             except (TypeError, ValueError):
                 info_dict = {}
 
-        info_dict["fairness_gap"] = float(
-            getattr(obs_model, "fairness_gap", getattr(obs_model, "fairness_index", 0.0)) or 0.0
-        )
+        info_dict["fairness_gap"] = self._obs_fairness_gap(obs_model)
         info_dict["requested_action_idx"] = requested_action_idx
         info_dict["executed_action_idx"] = action_idx
         info_dict["action_mask_applied"] = bool(action_idx != requested_action_idx)
@@ -136,7 +140,12 @@ class GovWorkflowGymEnv(gym.Env):
     def action_masks(self) -> np.ndarray:
         if self._current_obs is None:
             return np.ones(N_ACTIONS, dtype=bool)
-        return self._amc.compute(self._current_obs, self._current_pm)
+        mask = self._amc.compute(self._current_obs, self._current_pm)
+        if self._max_non_advance_streak > 0 and self._non_advance_streak >= self._max_non_advance_streak:
+            forced = np.zeros(N_ACTIONS, dtype=bool)
+            forced[18] = True
+            return forced
+        return mask
 
     def render(self) -> None:
         return None
@@ -158,7 +167,7 @@ class GovWorkflowGymEnv(gym.Env):
             return []
 
     def _queue_service(self, snap: Any) -> Optional[ServiceType]:
-        value = getattr(snap, "service", None) or getattr(snap, "service_type", None)
+        value = getattr(snap, "service_type", None) or getattr(snap, "service", None)
         if value is None:
             return None
         if isinstance(value, ServiceType):
@@ -169,10 +178,20 @@ class GovWorkflowGymEnv(gym.Env):
             return None
 
     def _queue_active_cases(self, snap: Any) -> int:
-        return int(getattr(snap, "active_cases", getattr(snap, "total_pending", 0)) or 0)
+        return int(getattr(snap, "total_pending", getattr(snap, "active_cases", 0)) or 0)
 
     def _queue_urgent_cases(self, snap: Any) -> int:
-        return int(getattr(snap, "urgent_cases", getattr(snap, "urgent_pending", 0)) or 0)
+        return int(getattr(snap, "urgent_pending", getattr(snap, "urgent_cases", 0)) or 0)
+
+    def _obs_fairness_gap(self, obs: ObservationModel) -> float:
+        """
+        Canonical fairness signal for RL info payload.
+
+        Current ObservationModel exposes fairness as `fairness_index`, while
+        episode-level grading uses `fairness_gap` from EpisodeStateModel.
+        Keep backward-compatible fallback to avoid runtime breaks.
+        """
+        return float(getattr(obs, "fairness_gap", getattr(obs, "fairness_index", 0.0)) or 0.0)
 
     def _build_action_model(self, action_type: ActionType, **kwargs: Any) -> ActionModel:
         service = kwargs.get("service")

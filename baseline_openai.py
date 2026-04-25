@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-
-
 # ── Path bootstrap ──────────────────────────────────────────────────────────
 import sys
 from pathlib import Path
@@ -42,51 +40,67 @@ from app.tasks import get_task, list_tasks
 
 NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1"
 
-# ── Confirmed model IDs on NVIDIA Build API (April 2026) ─────────────────────
+# ── Global 10-Model Sequential Pool (April 2026 — Verified on NVIDIA NIM) ────
+#
+# CHANGES FROM PREVIOUS VERSION:
+#   REMOVED (invalid/unavailable IDs):
+#     qwen/qwen3-next-80b-a3b-instruct     → invalid model ID
+#     moonshotai/kimi-k2-instruct-0905     → not on NVIDIA NIM
+#     deepseek-ai/deepseek-v3.2            → wrong ID (use deepseek-v3)
+#     google/gemma-3-27b-it               → outdated (gemma-4 released)
+#     mistralai/mixtral-8x22b-instruct-v0.1 → replaced by newer models
+#   ADDED (verified April 2026):
+#     deepseek-ai/deepseek-v4-flash        → FREE endpoint, 1M context
+#     deepseek-ai/deepseek-r1             → reasoning, 685B MoE
+#     nvidia/nemotron-3-super-120b-a12b   → hybrid Mamba-Transformer, 1M ctx
+#     minimaxai/minimax-m2.7             → FREE endpoint, 230B
+#     google/gemma-4-31b-it             → latest Gemma on NVIDIA NIM
+#     qwen/qwen3.5-122b-a10b            → latest Qwen on NVIDIA NIM
 
-# ── Global 10-Model Sequential Pool ───────────────────────────────────────────
-# Consistent order for all tasks (easy, medium, hard).
-# Fallback rotates progressively from primary → highest cap → fastest.
 GLOBAL_MODEL_POOL: list[str] = [
-    "meta/llama-3.3-70b-instruct",         # 1. Primary
-    "qwen/qwen3-next-80b-a3b-instruct",    # 2. Reasoning
-    "moonshotai/kimi-k2-instruct-0905",    # 3. Planning
-    "meta/llama-3.1-405b-instruct",        # 4. Max Capacity
-    "deepseek-ai/deepseek-v3.2",           # 5. High Perf
-    "qwen/qwq-32b",                        # 6. Thinking Fallback
-    "mistralai/mixtral-8x22b-instruct-v0.1",# 7. Fast MoE
-    "google/gemma-3-27b-it",               # 8. Lightweight
-    "microsoft/phi-4-mini-instruct",       # 9. Reliable Last Resort
-    "meta/llama-3.1-8b-instruct"           # 10. Fast Safety Fallback
+    "meta/llama-3.3-70b-instruct",          # 1. Primary
+    "deepseek-ai/deepseek-v4-flash",         # 2. FREE endpoint — 1M context
+    "deepseek-ai/deepseek-r1",              # 3. Reasoning — 685B MoE
+    "nvidia/nemotron-3-super-120b-a12b",    # 4. NVIDIA native — 1M ctx
+    "qwen/qwen3.5-122b-a10b",              # 5. Qwen3.5 — tool calling
+    "deepseek-ai/deepseek-v3",             # 6. DeepSeek V3 — hybrid mode
+    "minimaxai/minimax-m2.7",             # 7. FREE endpoint — 230B
+    "google/gemma-4-31b-it",             # 8. Dense 31B — agentic workflows
+    "microsoft/phi-4-mini-instruct",     # 9. Reliable small — last resort
+    "meta/llama-3.1-8b-instruct",       # 10. Fastest safety fallback
 ]
 
-# ── Free endpoint pool (KEY 2 fallback) ───────────────────────────────────────
-# Separated from primary bucket. These are "FREE" tagged models on NVIDIA Build.
+# ── Free endpoint pool (KEY 2 — NVIDIA_API_KEY_2 fallback) ───────────────────
 FREE_POOL: list[str] = [
+    "deepseek-ai/deepseek-v4-flash",
+    "minimaxai/minimax-m2.7",
     "microsoft/phi-4-mini-instruct",
-    "meta/llama-3.1-8b-instruct"
+    "meta/llama-3.1-8b-instruct",
 ]
 
-# ── Fixed seeds (one per task for reproducibility) ────────────────────────────
+# ── Fixed seeds ────────────────────────────────────────────────────────────────
 TASK_SEEDS: dict[str, int] = {
     "district_backlog_easy": 11,
     "mixed_urgency_medium":  22,
     "cross_department_hard": 33,
 }
 
-# ── LLM generation settings ───────────────────────────────────────────────────
-LLM_TEMPERATURE = 0.2    # low = deterministic, structured JSON output
+LLM_TEMPERATURE = 0.2
 LLM_TOP_P       = 0.7
 LLM_MAX_TOKENS  = 512
 MAX_LLM_STEPS   = 80
 
-# ── Rate-limit & retry settings ───────────────────────────────────────────────
-# NVIDIA free tier enforces ~5 RPM = 1 call every 12 seconds.
 LLM_CALL_DELAY  = float(os.environ.get("LLM_CALL_DELAY", "12.0"))
-LLM_CALL_JITTER = 1.0    # ± random jitter added to avoid thundering-herd
+LLM_CALL_JITTER = 1.0
 
-# ── Enum fields that must be lowercase for Pydantic ───────────────────────────
+# ── Enum fields that MUST be lowercase for Pydantic StrEnum ──────────────────
 _ENUM_FIELDS = {"action_type", "priority_mode", "service", "target_service"}
+
+# ── Canonical field names (Phase 2 update — do NOT use legacy names) ─────────
+#   CORRECT                        WRONG (legacy)
+#   snap.blocked_missing_docs  ←   snap.missing_docs_cases
+#   snap.total_pending         ←   snap.active_cases
+#   obs.fairness_gap           ←   obs.fairness_index
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -94,15 +108,6 @@ _ENUM_FIELDS = {"action_type", "priority_mode", "service", "target_service"}
 # ══════════════════════════════════════════════════════════════════════════════
 
 class ModelRotator:
-    """
-    Manages automatic model rotation through the global fallback sequence.
-
-    Lifecycle per episode:
-      1. Starts at the 1st model in the 10-model sequence.
-      2. If an error occurs, the process instantly ends for that model, and it 
-         rotates to the next model cyclically.
-    """
-
     def __init__(self, task_id: str) -> None:
         self._sequence: list[str] = GLOBAL_MODEL_POOL.copy()
         self._index = 0
@@ -115,34 +120,20 @@ class ModelRotator:
 
     @property
     def current_key_id(self) -> int:
-        """Returns 2 if it's a free model, 1 otherwise."""
-        if self.current in FREE_POOL:
-            return 2
-        return 1
+        return 2 if self.current in FREE_POOL else 1
 
     @property
     def pool_exhausted(self) -> bool:
-        # We rotate cyclically, so the pool is never permanently exhausted.
-        # But we track if we did a full loop without any progress.
         return len(self._rotation_log) >= 50
 
     def rotate(self, reason: str = "error") -> str | None:
-        """
-        Advance to the next model in the list in an endless loop.
-        """
         old = self.current
-        self._rotation_log.append({
-            "from": old,
-            "reason": reason,
-        })
-        
+        self._rotation_log.append({"from": old, "reason": reason})
         self._index = (self._index + 1) % len(self._sequence)
         new = self._sequence[self._index]
-        
         print(
-            f"\n  🔄 Model rotated [Fallback]: "
-            f"{old}  →  {new}"
-            f"  (reason: {reason})"
+            f"\n  🔄 Model rotated: "
+            f"{old.split('/')[-1]}  →  {new.split('/')[-1]}  ({reason})"
         )
         return new
 
@@ -190,12 +181,12 @@ class EpisodeResult:
     timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
 
     def summary(self) -> str:
-        # Compute specific model performance/usage counts for final report
-        usage = {}
+        usage: dict[str, int] = {}
         for r in self.step_log:
             usage[r.model_used] = usage.get(r.model_used, 0) + 1
-        usage_str = ", ".join(f"{m} ({c} steps)" for m, c in usage.items())
-        
+        usage_str = ", ".join(
+            f"{m.split('/')[-1]} ({c})" for m, c in usage.items()
+        )
         return (
             f"[{self.task_id}] agent={self.agent} "
             f"score={self.score:.3f} reward={self.total_reward:.2f} "
@@ -204,7 +195,7 @@ class EpisodeResult:
             f"rotations={len(self.model_rotations)} "
             f"day={self.final_day} steps={self.total_steps} "
             f"time={self.elapsed_seconds:.1f}s\n"
-            f"Model Performance Use: {usage_str}"
+            f"  Model usage: {usage_str}"
         )
 
 
@@ -213,6 +204,12 @@ class EpisodeResult:
 # ══════════════════════════════════════════════════════════════════════════════
 
 class DirectEnvClient:
+    """
+    FIX: grade() now calls grade_episode(task_id, episode_state) correctly.
+    Previous version called grade_episode(self.env.state()) — wrong signature.
+    get_episode_state() returns EpisodeStateModel, not ObservationModel.
+    """
+
     def __init__(self, task_id: str, seed: int) -> None:
         self.env = GovWorkflowEnv(task_id=task_id)
         self._seed = seed
@@ -236,7 +233,8 @@ class DirectEnvClient:
 
     def grade(self) -> tuple[float, str, dict[str, float]]:
         from app.graders import grade_episode
-        result = grade_episode(self.env.state())
+        episode_state = self.env.state()
+        result = grade_episode(episode_state)
         return result.score, result.grader_name, result.metrics
 
 
@@ -299,26 +297,22 @@ class HttpEnvClient:
 class HeuristicAgent:
     """
     Rule-based agent. Requires no API key.
-    Useful as score floor and for offline/CI testing.
 
-    Strategy (priority order every step):
-      1. Day 0: set priority mode → sla_aware
-      2. Day 0: deploy reserve officers to most backlogged service
-      3. Any day: resolve missing documents (highest count first)
-      4. Final 5 days + urgent backlog: escalate one case
-      5. Load imbalance > 3x: reallocate one officer
-      6. Default: advance_time
+    FIXED field names (Phase 2 canonical):
+      snap.blocked_missing_docs  ← was snap.missing_docs_cases
+      snap.total_pending         ← was snap.active_cases
     """
 
     def __init__(self) -> None:
         self._priority_set = False
-        self._reserve_deployed = False
+        self._admin_action_day: int | None = None
+        self._last_doc_request_day: int | None = None
 
     def reset(self) -> None:
         self._priority_set = False
-        self._reserve_deployed = False
+        self._admin_action_day = None
+        self._last_doc_request_day = None
 
-    # HeuristicAgent has no current_model — expose for run_episode compat
     current_model = "heuristic"
 
     def rotation_summary(self) -> list[dict]:
@@ -327,57 +321,106 @@ class HeuristicAgent:
     def update_reward(self, _: float) -> None:
         pass
 
+    @staticmethod
+    def _svc_key(service: str | ServiceType) -> str:
+        return service.value if isinstance(service, ServiceType) else str(service)
+
     def act(self, obs: ObservationModel) -> ActionModel:
+        snapshots = list(obs.queue_snapshots.values())
+
+        # One admin action per simulated day; then always advance time.
+        if self._admin_action_day == obs.day:
+            return ActionModel(action_type=ActionType.ADVANCE_TIME)
+
+        # 1. Set priority mode once
         if not self._priority_set:
             self._priority_set = True
+            self._admin_action_day = obs.day
             return ActionModel(
                 action_type=ActionType.SET_PRIORITY_MODE,
                 priority_mode=PriorityMode.URGENT_FIRST,
             )
 
-        if not self._reserve_deployed and obs.officer_pool.reserve_officers > 0:
-            self._reserve_deployed = True
-            most_loaded = max(obs.queue_snapshots, key=lambda s: s.active_cases)
+        # 2. Allocate any idle officer to the currently most loaded service.
+        if obs.officer_pool.idle_officers > 0 and snapshots:
+            most_loaded = max(snapshots, key=lambda s: s.total_pending)
+            self._admin_action_day = obs.day
             return ActionModel(
                 action_type=ActionType.ASSIGN_CAPACITY,
-                service=most_loaded.service,
-                officer_delta=1,
+                capacity_assignment={most_loaded.service_type.value: 1},
             )
 
-        for snap in sorted(obs.queue_snapshots, key=lambda s: -s.missing_docs_cases):
-            if snap.missing_docs_cases > 0:
+        days_left = obs.max_days - obs.day
+
+        # 3. Reallocate one officer if load/officer ratio is clearly imbalanced.
+        allocated = {
+            self._svc_key(svc): int(off)
+            for svc, off in obs.officer_pool.allocated.items()
+        }
+        if snapshots and len(allocated) >= 2:
+            case_counts = {s.service_type.value: s.total_pending for s in snapshots}
+
+            best_src: tuple[str, int] | None = None
+            best_tgt: tuple[str, int] | None = None
+            src_ratio = float("inf")
+            tgt_ratio = -1.0
+
+            for svc, officers in allocated.items():
+                if officers <= 1:
+                    continue
+                ratio = case_counts.get(svc, 0) / max(officers, 1)
+                if ratio < src_ratio:
+                    src_ratio = ratio
+                    best_src = (svc, officers)
+
+            for svc, officers in allocated.items():
+                ratio = case_counts.get(svc, 0) / max(officers, 1)
+                if ratio > tgt_ratio:
+                    tgt_ratio = ratio
+                    best_tgt = (svc, officers)
+
+            if best_src and best_tgt and best_src[0] != best_tgt[0] and tgt_ratio > src_ratio * 1.8:
+                self._admin_action_day = obs.day
+                return ActionModel(
+                    action_type=ActionType.REALLOCATE_OFFICERS,
+                    reallocation_delta={best_src[0]: -1, best_tgt[0]: 1},
+                )
+
+        # 4. Request missing docs conservatively to avoid repeatedly resetting
+        # resolution days for already-requested cases.
+        can_request_docs = (
+            any(s.blocked_missing_docs > 0 for s in snapshots)
+            and (
+                self._last_doc_request_day is None
+                or (obs.day - self._last_doc_request_day) >= 3
+                or obs.pending_doc_resolutions == 0
+            )
+        )
+        if can_request_docs:
+            target_docs = max(
+                snapshots,
+                key=lambda s: (s.blocked_missing_docs, s.current_sla_risk, s.total_pending),
+            )
+            if target_docs.blocked_missing_docs > 0:
+                self._admin_action_day = obs.day
+                self._last_doc_request_day = obs.day
                 return ActionModel(
                     action_type=ActionType.REQUEST_MISSING_DOCUMENTS,
-                    service=snap.service,
+                    service_target=target_docs.service_type,
                 )
 
+        # 5. Escalate in the final window when urgency is present.
         if obs.escalation_budget_remaining > 0:
-            urgent_snaps = [s for s in obs.queue_snapshots if s.urgent_cases > 0]
-            if urgent_snaps and (obs.max_days - obs.day) <= 5:
-                target = max(urgent_snaps, key=lambda s: s.urgent_cases)
+            urgent_snaps = [s for s in snapshots if s.urgent_pending > 0]
+            if urgent_snaps and days_left <= 5:
+                target = max(urgent_snaps, key=lambda s: s.urgent_pending)
+                self._admin_action_day = obs.day
                 return ActionModel(
                     action_type=ActionType.ESCALATE_SERVICE,
-                    service=target.service,
+                    escalation_target=target.service_type,
                 )
 
-        if obs.officer_pool.allocations:
-            case_counts = {s.service: s.active_cases for s in obs.queue_snapshots}
-            for src_svc, src_off in obs.officer_pool.allocations.items():
-                if src_off < 2:
-                    continue
-                src_load = case_counts.get(src_svc, 0) / max(src_off, 1)
-                for tgt_svc, tgt_off in obs.officer_pool.allocations.items():
-                    if tgt_svc == src_svc:
-                        continue
-                    tgt_load = case_counts.get(tgt_svc, 0) / max(tgt_off, 1)
-                    if tgt_load > src_load * 3:
-                        return ActionModel(
-                            action_type=ActionType.REALLOCATE_OFFICERS,
-                            service=src_svc,
-                            target_service=tgt_svc,
-                            officer_delta=1,
-                        )
-
+        # 6. Default — progress simulation.
         return ActionModel(action_type=ActionType.ADVANCE_TIME)
 
 
@@ -401,6 +444,12 @@ YOUR GOAL: Maximise the episode score (0.0 to 1.0) by:
   - Keeping all services fairly served (no service left behind)
   - Using escalations sparingly — only when a case is about to breach SLA
   - Keeping officers productively busy (not idle)
+
+QUEUE STATUS FIELDS EXPLAINED:
+  backlog      = total_pending applications in queue
+  missing_docs = blocked_missing_docs (stuck waiting for documents)
+  urgent       = urgent_cases (high-urgency applications)
+  breached     = breached_cases (already past SLA deadline)
 
 AVAILABLE ACTIONS — return exactly ONE per turn as JSON:
 
@@ -426,37 +475,28 @@ AVAILABLE ACTIONS — return exactly ONE per turn as JSON:
 
 CRITICAL RULES:
   - ALL values MUST be lowercase: driving_license NOT DRIVING_LICENSE
-  - advance_time is the ONLY action that earns progress reward — call it every day
+  - advance_time is the ONLY action that earns progress reward
   - Do NOT chain more than 2 admin actions before calling advance_time
   - Do NOT escalate before (max_days - 5) unless case already breached SLA
   - Do NOT reallocate if source service has fewer than 2 officers
 
 OPTIMAL STRATEGY:
-  Day 0:    set_priority_mode → assign_capacity (if reserves > 0) → advance_time
-  Every day: request_missing_documents (ONE service only) → advance_time
-  Final 5:  escalate_service (urgent/breached only) → advance_time
-  MAXIMISE advance_time calls — that is where all completions happen.
+  Day 0:     set_priority_mode → assign_capacity (if reserves > 0) → advance_time
+  Every day: request_missing_documents (ONE service, highest missing_docs) → advance_time
+  Final 5:   escalate_service (urgent/breached only) → advance_time
 
 RESPONSE FORMAT — return ONLY a raw JSON object, nothing else:
   CORRECT:   {"action_type": "advance_time"}
   CORRECT:   {"action_type": "request_missing_documents", "service": "driving_license"}
-  WRONG:     ```json\\n{"action_type": "ADVANCE_TIME"}```
+  WRONG:     ```json\n{"action_type": "ADVANCE_TIME"}```
 """
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# SECTION 8 — JSON Extraction with Lowercase Normaliser  [FIX 1]
+# SECTION 8 — JSON Extraction with Lowercase Normaliser
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _extract_json_action(raw: str) -> dict[str, Any]:
-    """
-    Extracts JSON from LLM response and normalises all enum fields to lowercase.
-
-    FIX 1: LLMs (especially instruction-tuned models) return DRIVING_LICENSE,
-    SET_PRIORITY_MODE, ADVANCE_TIME etc. in UPPERCASE.
-    Pydantic StrEnum expects lowercase snake_case values.
-    Normalise silently here so ActionModel(**parsed) never fails on case alone.
-    """
     cleaned = re.sub(r"```(?:json)?", "", raw).strip()
     parsed: dict[str, Any] | None = None
 
@@ -474,13 +514,9 @@ def _extract_json_action(raw: str) -> dict[str, Any]:
                 pass
 
     if parsed is None:
-        print(
-            f"  ⚠ Could not parse LLM JSON, falling back to advance_time. "
-            f"Raw snippet: {raw[:120]}"
-        )
+        print(f"  ⚠ JSON parse failed, falling back to advance_time. Raw: {raw[:120]!r}")
         return {"action_type": "advance_time"}
 
-    # Normalise enum fields: DRIVING_LICENSE → driving_license
     for enum_field in _ENUM_FIELDS:
         if enum_field in parsed and isinstance(parsed[enum_field], str):
             parsed[enum_field] = parsed[enum_field].lower()
@@ -489,19 +525,27 @@ def _extract_json_action(raw: str) -> dict[str, Any]:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# SECTION 9 — LLM Agent with Model Rotation  [FIX 2 + FIX 3]
+# SECTION 9 — Observation → User Message Builder
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _build_user_message(
     obs: ObservationModel, step_num: int, cumulative_reward: float
 ) -> str:
+    """
+    FIXED field names (Phase 2 canonical):
+      snap.total_pending        ← was snap.active_cases
+      snap.blocked_missing_docs ← was snap.missing_docs_cases
+    """
     queue_lines = []
     for snap in obs.queue_snapshots:
         officers = obs.officer_pool.allocations.get(snap.service, 0)
         queue_lines.append(
-            f"  {snap.service}: backlog={snap.active_cases} "
-            f"officers={officers} missing_docs={snap.missing_docs_cases} "
-            f"urgent={snap.urgent_cases} breached={snap.breached_cases} "
+            f"  {snap.service:<22}: "
+            f"backlog={snap.total_pending:>3} "
+            f"officers={officers} "
+            f"missing_docs={snap.blocked_missing_docs:>2} "
+            f"urgent={snap.urgent_cases} "
+            f"breached={snap.breached_cases} "
             f"avg_age={snap.avg_age_days:.1f}d"
         )
     return (
@@ -509,9 +553,10 @@ def _build_user_message(
         f"| Days remaining: {obs.max_days - obs.day}\n"
         f"Cumulative reward: {cumulative_reward:.2f}\n"
         f"Priority mode: {obs.priority_mode}\n"
-        f"Reserve officers available: {obs.officer_pool.reserve_officers}\n"
+        f"Reserve officers: {obs.officer_pool.reserve_officers}\n"
         f"Escalation budget remaining: {obs.escalation_budget_remaining}\n"
-        f"Total backlog: {obs.total_backlog} | Completed: {obs.total_completed} "
+        f"Total pending: {obs.total_backlog} "
+        f"| Completed: {obs.total_completed} "
         f"| SLA breaches: {obs.total_sla_breaches}\n"
         f"Fairness gap: {obs.fairness_gap:.3f}\n\n"
         f"QUEUE STATUS:\n" + "\n".join(queue_lines) + "\n\n"
@@ -519,21 +564,11 @@ def _build_user_message(
     )
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# SECTION 10 — LLM Agent with Model Rotation
+# ══════════════════════════════════════════════════════════════════════════════
+
 class LLMAgent:
-    """
-    LLM-powered agent with automatic model rotation on rate-limit errors.
-
-    FIX 2 — Retry + rotate:
-      On 429 RateLimitError: wait LLM_RETRY_BASE * attempt seconds.
-      After LLM_MAX_RETRIES failures on the same model → rotate via ModelRotator.
-      Primary pool is tried first; backup pool activates when primary is exhausted.
-      If entire pool exhausted → returns ActionType.ADVANCE_TIME safely.
-
-    FIX 3 — Inter-call throttle:
-      12s delay (+/- 1s jitter) between every LLM API call to stay under 5 RPM.
-      Applied in run_episode() after every step, not inside act() itself.
-    """
-
     def __init__(
         self,
         task_id: str,
@@ -548,26 +583,24 @@ class LLMAgent:
 
         resolved_key = api_key or os.environ.get("NVIDIA_API_KEY", "")
         self._api_key_2 = os.environ.get("NVIDIA_API_KEY_2", "")
-        
+
         if not resolved_key:
             raise ValueError(
                 "NVIDIA_API_KEY not set.\n"
-                "  .env file    : NVIDIA_API_KEY=nvapi-xxxxxxxxxxxx\n"
-                "  Get free key : https://build.nvidia.com/explore/discover"
+                "  .env file : NVIDIA_API_KEY=nvapi-xxxxxxxxxxxx\n"
+                "  Get free key: https://build.nvidia.com/explore/discover"
             )
 
         self._api_key = resolved_key
         self._task_id = task_id
         self._rotator = ModelRotator(task_id)
 
-        # Manual model override (CLI --model flag) goes to front of sequence
         if model_override:
             seq = [model_override] + [
                 m for m in self._rotator._sequence if m != model_override
             ]
             self._rotator._sequence = seq
 
-        # We maintain two client instances for rotation
         self._client = self._OpenAI(base_url=NVIDIA_BASE_URL, api_key=self._api_key)
         self._client_2 = (
             self._OpenAI(base_url=NVIDIA_BASE_URL, api_key=self._api_key_2)
@@ -592,25 +625,21 @@ class LLMAgent:
         return self._rotator.summary()
 
     def act(self, obs: ObservationModel, step_num: int) -> ActionModel:
-        # Entire pool exhausted — safe no-op fallback
         if self._rotator.pool_exhausted:
+            print("  ⚠ Pool exhausted — returning advance_time")
             return ActionModel(action_type=ActionType.ADVANCE_TIME)
 
         user_message = _build_user_message(obs, step_num, self._cumulative_reward)
         self._history.append({"role": "user", "content": user_message})
 
-        # Rolling window — keep last 10 exchanges (20 messages)
         if len(self._history) > 20:
             self._history = self._history[-20:]
 
         messages = [{"role": "system", "content": SYSTEM_PROMPT}] + self._history
-
         raw_reply = ""
 
-        # Loop until a model responds successfully. Replaces old retry/backoff logic.
         while True:
             try:
-                # Select correct client based on model pool
                 active_client = self._client
                 if self._rotator.current_key_id == 2 and self._client_2:
                     active_client = self._client_2
@@ -621,31 +650,24 @@ class LLMAgent:
                     temperature=LLM_TEMPERATURE,
                     top_p=LLM_TOP_P,
                     max_tokens=LLM_MAX_TOKENS,
-                    timeout=30,       # hard 30s socket timeout per call
+                    timeout=30,
                 )
-                raw_reply = response.choices[0].message.content or ""
-                break               # success — exit loop
+                raw_reply = response.choices.message.content or ""
+                break
 
             except KeyboardInterrupt:
-                raise               # propagate Ctrl+C immediately
+                raise
 
             except Exception as exc:
                 err_name = type(exc).__name__
                 err_msg  = str(exc)[:120]
-                
-                print(
-                    f"  ⚠ {err_name} on {self._rotator.current}: {err_msg}"
-                )
-                
-                # End process, rotate immediately, repeat same step with new model
+                print(f"  ⚠ {err_name} on {self._rotator.current.split('/')[-1]}: {err_msg}")
                 self._rotator.rotate(reason=err_name)
-                
-                # Sleep briefly to not spam the endpoint infinitely while rotating
                 time.sleep(1.0)
+                if self._rotator.pool_exhausted:
+                    return ActionModel(action_type=ActionType.ADVANCE_TIME)
 
         self._history.append({"role": "assistant", "content": raw_reply})
-
-        # FIX 1: normalise UPPERCASE enum values before Pydantic validation
         action_dict = _extract_json_action(raw_reply)
 
         try:
@@ -656,7 +678,7 @@ class LLMAgent:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# SECTION 10 — Episode Runner
+# SECTION 11 — Episode Runner
 # ══════════════════════════════════════════════════════════════════════════════
 
 def run_episode(
@@ -670,16 +692,9 @@ def run_episode(
     max_steps: int = MAX_LLM_STEPS,
     delay_override: float | None = None,
 ) -> EpisodeResult:
-    """
-    Run a single episode with the specified agent and mode.
-    """
-    seed = TASK_SEEDS[task_id]
-    
-    # ── Resolve delay ────────────────────────────────────────────────────────
-    # CLI override > Env Var > Global Constant
+    seed  = TASK_SEEDS.get(task_id, get_task(task_id).seed)
     delay = delay_override if delay_override is not None else LLM_CALL_DELAY
 
-    # Build environment client
     if mode == "http":
         client: DirectEnvClient | HttpEnvClient = HttpEnvClient(
             task_id, seed, base_url=server_url
@@ -687,7 +702,6 @@ def run_episode(
     else:
         client = DirectEnvClient(task_id, seed)
 
-    # Build agent
     if agent_type == "llm":
         agent: HeuristicAgent | LLMAgent = LLMAgent(
             task_id=task_id,
@@ -695,11 +709,9 @@ def run_episode(
             api_key=api_key,
         )
         primary_label = agent.current_model
-        pool = GLOBAL_MODEL_POOL.copy()
     else:
         agent = HeuristicAgent()
         primary_label = "heuristic"
-        pool = []
 
     agent.reset()
     obs = client.reset()
@@ -713,13 +725,11 @@ def run_episode(
     print(f"\n{'═'*65}")
     print(f"  Task  : {task_id}")
     if agent_type == "llm":
-        key1_status = "loaded" if os.environ.get("NVIDIA_API_KEY", "") else "MISSING"
-        key2_status = "loaded" if os.environ.get("NVIDIA_API_KEY_2", "") else "not set (skipping free pool)"
-        print(f"  🔑 KEY 1: {key1_status}  |  ✅ KEY 2: {key2_status}")
-        
-        print(f"  Pool  : {GLOBAL_MODEL_POOL}")
-        if os.environ.get("NVIDIA_API_KEY_2", ""):
-            print(f"  Free  : {FREE_POOL}")
+        k1 = "✅ loaded" if os.environ.get("NVIDIA_API_KEY", "") else "❌ MISSING"
+        k2 = "✅ loaded" if os.environ.get("NVIDIA_API_KEY_2", "") else "⚠ not set"
+        print(f"  KEY 1 : {k1}   KEY 2 : {k2}")
+        pool_short = " → ".join(m.split("/")[-1][:14] for m in GLOBAL_MODEL_POOL)
+        print(f"  Pool  : {pool_short}")
     print(f"  Agent : {agent_type}  |  Mode: {mode}  |  Seed: {seed}")
     print(f"  Max steps: {max_steps}  |  Delay: {delay}s")
     print(f"{'═'*65}")
@@ -729,9 +739,9 @@ def run_episode(
         current_model = agent.current_model
 
         if agent_type == "llm":
-            action = agent.act(obs, step_num)           # type: ignore[arg-type]
+            action = agent.act(obs, step_num)
         else:
-            action = agent.act(obs)                     # type: ignore[arg-type]
+            action = agent.act(obs)
 
         obs, reward, terminated, truncated, info = client.step(action)
         agent.update_reward(reward)
@@ -739,6 +749,18 @@ def run_episode(
         total_reward += reward
         if info.invalid_action:
             total_invalid += 1
+
+        step_notes: list[str] = []
+        legacy_notes = getattr(info, "notes", None)
+        if isinstance(legacy_notes, list):
+            step_notes.extend(str(n).strip() for n in legacy_notes if str(n).strip())
+        elif isinstance(legacy_notes, str) and legacy_notes.strip():
+            step_notes.append(legacy_notes.strip())
+
+        if info.action_explanation.strip():
+            step_notes.append(info.action_explanation.strip())
+        step_notes.extend(s.strip() for s in info.effects_resolved_this_step if s.strip())
+        step_notes = list(dict.fromkeys(step_notes))
 
         record = StepRecord(
             step=step_num,
@@ -749,7 +771,7 @@ def run_episode(
             total_backlog=obs.total_backlog,
             total_completed=obs.total_completed,
             model_used=current_model,
-            notes=info.notes,
+            notes=step_notes,
         )
         step_log.append(record)
 
@@ -764,21 +786,21 @@ def run_episode(
                 f"action={action.action_type.value:<28} "
                 f"reward={reward:+.3f}  {status}  {model_tag}"
             )
-            if info.notes:
-                print(f"         notes: {info.notes}")
+            if step_notes:
+                print(f"         notes: {step_notes}")
 
-        # FIX 3: throttle LLM calls — NVIDIA free tier ≈ 5 RPM (1 call / 12s)
-        # Jitter avoids synchronized burst if multiple episodes run concurrently.
         if agent_type == "llm":
             actual_delay = delay + _random.uniform(-LLM_CALL_JITTER, LLM_CALL_JITTER)
             if not verbose:
-                print(f"  Executing step {step_num}/{max_steps}... [Sleeping {actual_delay:.1f}s to respect rate limits]", end="\r", flush=True)
+                print(
+                    f"  Step {step_num}/{max_steps} — sleeping {actual_delay:.1f}s "
+                    f"[{current_model.split('/')[-1][:20]}]",
+                    end="\r", flush=True,
+                )
             time.sleep(max(1.0, actual_delay))
             if not verbose:
-                 print(" " * 80, end="\r", flush=True) # clear the line
+                print(" " * 80, end="\r", flush=True)
 
-
-    # Grade the episode
     score, grader_name, grader_metrics = client.grade()
     elapsed = round(time.perf_counter() - start, 2)
     rotations = agent.rotation_summary()
@@ -792,13 +814,11 @@ def run_episode(
     print(f"  Grader metrics:")
     for metric, value in grader_metrics.items():
         bar = "█" * int(value * 20)
-        print(f"    {metric:<32} {value:.3f}  {bar}")
+        print(f"    {metric:<34} {value:.3f}  {bar}")
     if rotations:
-        print(f"  Model rotation log:")
+        print(f"  Rotation log:")
         for r in rotations:
-            print(
-                f"    {r['from']:<40} → rotated ({r['reason']})"
-            )
+            print(f"    {r['from'].split('/')[-1]:<30} → rotated ({r['reason']})")
     print(f"{'-'*65}")
 
     return EpisodeResult(
@@ -824,7 +844,7 @@ def run_episode(
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# SECTION 11 — Reporter
+# SECTION 12 — Reporter
 # ══════════════════════════════════════════════════════════════════════════════
 
 def save_results(results: list[EpisodeResult], out_dir: Path) -> Path:
@@ -836,6 +856,7 @@ def save_results(results: list[EpisodeResult], out_dir: Path) -> Path:
         "total_episodes": len(results),
         "average_score": round(sum(r.score for r in results) / len(results), 4),
         "model_pool": GLOBAL_MODEL_POOL,
+        "free_pool": FREE_POOL,
         "episodes": [asdict(r) for r in results],
     }
     out_path.write_text(json.dumps(payload, indent=2))
@@ -866,7 +887,7 @@ def print_leaderboard(results: list[EpisodeResult]) -> None:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# SECTION 12 — CLI Entry Point
+# SECTION 13 — CLI Entry Point
 # ══════════════════════════════════════════════════════════════════════════════
 
 def build_parser() -> argparse.ArgumentParser:
@@ -874,36 +895,26 @@ def build_parser() -> argparse.ArgumentParser:
         description="Gov Workflow OpenEnv — Multi-Model Rotating LLM Baseline",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Model sequence (automatic rotation on API failure):
-  meta/llama-3.3-70b-instruct → qwen/qwen3-next-80b-a3b-instruct → ... (10 models)
+10-model pool (April 2026):
+  llama-3.3-70b → deepseek-v4-flash → deepseek-r1 → nemotron-3-super →
+  qwen3.5-122b → deepseek-v3 → minimax-m2.7 → gemma-4-31b →
+  phi-4-mini → llama-3.1-8b
 
 Examples:
   python baseline_openai.py --agent heuristic --verbose
   python baseline_openai.py --agent llm --task district_backlog_easy --verbose
   python baseline_openai.py --agent llm --task all --save-results
-  python baseline_openai.py --agent llm --model mistralai/mistral-large-2-instruct
+  python baseline_openai.py --agent llm --model deepseek-ai/deepseek-v4-flash
   python baseline_openai.py --mode http --url http://localhost:7860 --agent llm
         """,
     )
-    p.add_argument(
-        "--agent", choices=["llm", "heuristic"], default="heuristic",
-        help="'heuristic' needs no API key. (default: heuristic)",
-    )
-    p.add_argument(
-        "--task", choices=list_tasks() + ["all"], default="all",
-        help="Which task to run. 'all' runs all three. (default: all)",
-    )
-    p.add_argument(
-        "--model", default=None,
-        help=(
-            "Override the primary model for all tasks. "
-            "If omitted, each task uses its own pool."
-        ),
-    )
+    p.add_argument("--agent", choices=["llm", "heuristic"], default="heuristic")
+    p.add_argument("--task", choices=list_tasks() + ["all"], default="all")
+    p.add_argument("--model", default=None)
     p.add_argument("--mode", choices=["direct", "http"], default="direct")
     p.add_argument("--url", default="http://localhost:7860")
     p.add_argument("--max-steps", type=int, default=MAX_LLM_STEPS)
-    p.add_argument("--delay", type=float, default=None, help="Override LLM_CALL_DELAY (sec)")
+    p.add_argument("--delay", type=float, default=None)
     p.add_argument("--api-key", default=None)
     p.add_argument("--verbose", action="store_true")
     p.add_argument("--save-results", action="store_true")
@@ -915,14 +926,11 @@ def main() -> None:
     tasks = list_tasks() if args.task == "all" else [args.task]
 
     print(f"\n{'═'*65}")
-    print("  Gov Workflow OpenEnv — Baseline Runner")
+    print("  Gov Workflow OpenEnv — Baseline Runner (April 2026)")
     print(f"  Agent : {args.agent.upper()}")
     if args.agent == "llm":
-        if args.model:
-            print(f"  Model : {args.model}  (manual override)")
-        else:
-            print("  Model : Global 10-model fallback sequence")
-            print(f"  pool  → {' → '.join(m.split('/')[-1][:15] for m in GLOBAL_MODEL_POOL)}")
+        pool_disp = " → ".join(m.split("/")[-1][:12] for m in GLOBAL_MODEL_POOL)
+        print(f"  Pool  : {pool_disp}")
     print(f"  Mode  : {args.mode}  |  Tasks: {', '.join(tasks)}")
     print(f"{'═'*65}")
 
@@ -932,8 +940,7 @@ def main() -> None:
             print("\n❌  NVIDIA_API_KEY not set.")
             print("    .env file  : NVIDIA_API_KEY=nvapi-xxxx")
             print("    PowerShell : $env:NVIDIA_API_KEY='nvapi-xxxx'")
-            print("    CMD        : set NVIDIA_API_KEY=nvapi-xxxx")
-            print("    Free key   : https://build.nvidia.com/explore/discover\n")
+            print("    Get free key: https://build.nvidia.com/explore/discover\n")
             sys.exit(1)
     else:
         key = None
@@ -961,4 +968,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    main()

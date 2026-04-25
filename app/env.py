@@ -74,6 +74,7 @@ class GovWorkflowEnv:
         self.task_id = task_id
         self.task: TaskConfig = get_task(task_id)
         self.seed = seed
+        self.max_steps_per_episode = max(1, int(self.task.max_days) * 10)
         self._init_episode_state()
 
     def reset(
@@ -87,6 +88,11 @@ class GovWorkflowEnv:
 
         self.seed = self.task.seed if seed is None else int(seed)
         self.rng = random.Random(self.seed)
+        max_steps_override = (options or {}).get("max_steps_per_episode")
+        if max_steps_override is None:
+            self.max_steps_per_episode = max(1, int(self.task.max_days) * 10)
+        else:
+            self.max_steps_per_episode = max(1, int(max_steps_override))
 
         self.episode_id = f"{self.task_id}-s{self.seed}-{uuid4().hex[:6]}"
         self.day = 0
@@ -177,6 +183,7 @@ class GovWorkflowEnv:
             fairness_threshold=self.task.fairness_threshold or 0.0,
             invalid_action=invalid_action,
             idle_capacity=day_result.idle_officer_days,
+            award_stability_bonus=(action.action_type == ActionType.ADVANCE_TIME),
         )
         self.metrics.cumulative_reward += reward.total_reward
 
@@ -186,7 +193,7 @@ class GovWorkflowEnv:
             and not invalid_action
         )
         self.truncated = (
-            self.day >= self.task.max_days
+            (self.day >= self.task.max_days or self.total_steps >= self.max_steps_per_episode)
             and not self.terminated
         )
 

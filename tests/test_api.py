@@ -436,3 +436,49 @@ async def test_api_simulation_live_step_flow_runs_without_500() -> None:
     assert "run_id" in payload
     assert "total_reward" in payload
     assert isinstance(payload["done"], bool)
+
+
+async def test_api_simulation_live_step_done_includes_string_end_log() -> None:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url=BASE) as c:
+        start = await c.post(
+            "/api/simulation/live/start",
+            json={
+                "task_id": "district_backlog_easy",
+                "agent_mode": "baseline_policy",
+                "policy_name": "backlog_clearance",
+                "max_steps": 1,
+                "seed": 42,
+            },
+        )
+        assert start.status_code == 200
+        run_id = start.json()["run_id"]
+        step = await c.post("/api/simulation/live/step", json={"run_id": run_id})
+
+    assert step.status_code == 200
+    payload = step.json()
+    assert payload["done"] is True
+    assert isinstance(payload.get("end_log"), str)
+    assert payload["end_log"].startswith("[END]")
+
+
+async def test_api_simulation_live_state_returns_serialized_dict() -> None:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url=BASE) as c:
+        start = await c.post(
+            "/api/simulation/live/start",
+            json={
+                "task_id": "district_backlog_easy",
+                "agent_mode": "baseline_policy",
+                "policy_name": "backlog_clearance",
+                "max_steps": 5,
+                "seed": 99,
+            },
+        )
+        assert start.status_code == 200
+        run_id = start.json()["run_id"]
+        state = await c.get(f"/api/simulation/live/{run_id}")
+
+    assert state.status_code == 200
+    payload = state.json()
+    assert payload["run_id"] == run_id
+    assert isinstance(payload.get("state"), dict)
+    assert payload["state"]["task_id"] == "district_backlog_easy"
