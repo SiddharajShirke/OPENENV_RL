@@ -16,7 +16,7 @@ entrypoint:
   inference_script: inference.py
 
 environment:
-  class: app.env.GovWorkflowEnv
+  class: server.gov_environment.GovWorkflowOpenEnv
   observation_model: app.models.ObservationModel
   action_model: app.models.ActionModel
   reward_model: app.models.RewardModel

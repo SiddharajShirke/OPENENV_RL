@@ -32,6 +32,7 @@ from app.models import (
     StepInfoModel,
 )
 from app.tasks import get_task, list_tasks
+from app.api_gateway import create_env_gateway, TransportMode
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -685,7 +686,7 @@ def run_episode(
     task_id: str,
     agent_type: str,
     model_override: str | None,
-    mode: str,
+    mode: TransportMode,
     server_url: str,
     api_key: str | None,
     verbose: bool,
@@ -695,12 +696,21 @@ def run_episode(
     seed  = TASK_SEEDS.get(task_id, get_task(task_id).seed)
     delay = delay_override if delay_override is not None else LLM_CALL_DELAY
 
-    if mode == "http":
-        client: DirectEnvClient | HttpEnvClient = HttpEnvClient(
-            task_id, seed, base_url=server_url
-        )
-    else:
-        client = DirectEnvClient(task_id, seed)
+    force_fastapi = os.getenv("FORCE_FASTAPI_GATEWAY", "0").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    env_api_prefix = os.getenv("OPENENV_ENV_API_PREFIX", "").strip()
+    client = create_env_gateway(
+        task_id=task_id,
+        seed=seed,
+        mode=mode,  # type: ignore[arg-type]
+        base_url=server_url,
+        api_prefix=env_api_prefix,
+        enforce_fastapi=force_fastapi,
+    )
 
     if agent_type == "llm":
         agent: HeuristicAgent | LLMAgent = LLMAgent(
@@ -730,7 +740,8 @@ def run_episode(
         print(f"  KEY 1 : {k1}   KEY 2 : {k2}")
         pool_short = " → ".join(m.split("/")[-1][:14] for m in GLOBAL_MODEL_POOL)
         print(f"  Pool  : {pool_short}")
-    print(f"  Agent : {agent_type}  |  Mode: {mode}  |  Seed: {seed}")
+    resolved_mode = getattr(client, "transport", mode)
+    print(f"  Agent : {agent_type}  |  Mode: {resolved_mode}  |  Seed: {seed}")
     print(f"  Max steps: {max_steps}  |  Delay: {delay}s")
     print(f"{'═'*65}")
 
@@ -906,12 +917,13 @@ Examples:
   python baseline_openai.py --agent llm --task all --save-results
   python baseline_openai.py --agent llm --model deepseek-ai/deepseek-v4-flash
   python baseline_openai.py --mode http --url http://localhost:7860 --agent llm
+  python baseline_openai.py --mode auto --url http://localhost:7860 --agent llm
         """,
     )
     p.add_argument("--agent", choices=["llm", "heuristic"], default="heuristic")
     p.add_argument("--task", choices=list_tasks() + ["all"], default="all")
     p.add_argument("--model", default=None)
-    p.add_argument("--mode", choices=["direct", "http"], default="direct")
+    p.add_argument("--mode", choices=["direct", "http", "auto"], default="auto")
     p.add_argument("--url", default="http://localhost:7860")
     p.add_argument("--max-steps", type=int, default=MAX_LLM_STEPS)
     p.add_argument("--delay", type=float, default=None)

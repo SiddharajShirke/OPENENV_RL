@@ -285,6 +285,28 @@ async def test_api_alias_reset_and_autostep_flow() -> None:
     assert "observation" in data
     assert isinstance(data["reward"], float)
 
+
+async def test_api_v1_alias_reset_step_state_grade_flow() -> None:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url=BASE) as c:
+        reset_r = await c.post("/api/v1/reset", json={"task_id": "district_backlog_easy", "seed": 11})
+        assert reset_r.status_code == 200
+        sid = reset_r.json()["session_id"]
+
+        step_r = await c.post(
+            "/api/v1/step",
+            json={"session_id": sid, "action": {"action_type": "advance_time"}},
+        )
+        assert step_r.status_code == 200
+        assert step_r.json()["session_id"] == sid
+
+        state_r = await c.post("/api/v1/state", json={"session_id": sid, "include_action_history": False})
+        assert state_r.status_code == 200
+        assert state_r.json()["session_id"] == sid
+
+        grade_r = await c.post("/api/v1/grade", json={"session_id": sid})
+        assert grade_r.status_code == 200
+        assert 0.0 <= float(grade_r.json()["score"]) <= 1.0
+
     async def test_frontend_alias_reset_accepts_missing_body() -> None:
         async with AsyncClient(transport=ASGITransport(app=app), base_url=BASE) as c:
             reset_r = await c.post("/api/reset")

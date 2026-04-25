@@ -44,6 +44,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Body, FastAPI, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.routing import APIRoute
 from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -2437,6 +2438,102 @@ def api_history_comparison_repair(comparison_id: str) -> ComparisonHistoryRepair
 # ─────────────────────────────────────────────────────────────────────────────
 
 app.include_router(api)
+
+
+def _normalize_api_prefix(prefix: str) -> str:
+    p = (prefix or "").strip()
+    if not p:
+        return ""
+    if not p.startswith("/"):
+        p = "/" + p
+    return p.rstrip("/")
+
+
+def _mount_versioned_api_aliases(
+    application: FastAPI,
+    *,
+    source_prefix: str,
+    target_prefix: str,
+) -> None:
+    """Mirror source API routes into a versioned target prefix."""
+    source_prefix = _normalize_api_prefix(source_prefix)
+    target_prefix = _normalize_api_prefix(target_prefix)
+    if not source_prefix or not target_prefix or source_prefix == target_prefix:
+        return
+
+    existing_keys: set[tuple[str, tuple[str, ...]]] = set()
+    for route in application.routes:
+        if isinstance(route, APIRoute):
+            methods = tuple(sorted(m for m in (route.methods or set()) if m not in {"HEAD", "OPTIONS"}))
+            existing_keys.add((route.path, methods))
+
+    for route in list(application.routes):
+        if not isinstance(route, APIRoute):
+            continue
+        if not route.path.startswith(f"{source_prefix}/"):
+            continue
+        if route.path.startswith(f"{target_prefix}/"):
+            continue
+
+        methods = sorted(m for m in (route.methods or set()) if m not in {"HEAD", "OPTIONS"})
+        if not methods:
+            continue
+
+        suffix = route.path[len(source_prefix):]
+        versioned_path = f"{target_prefix}{suffix}"
+        route_key = (versioned_path, tuple(methods))
+        if route_key in existing_keys:
+            continue
+
+        base_op = route.operation_id or route.name or "operation"
+        path_token = versioned_path.strip("/").replace("/", "_").replace("{", "").replace("}", "")
+        versioned_operation_id = f"{base_op}__v1__{path_token}"
+
+        application.add_api_route(
+            path=versioned_path,
+            endpoint=route.endpoint,
+            methods=methods,
+            response_model=route.response_model,
+            status_code=route.status_code,
+            tags=list(route.tags or []),
+            dependencies=list(route.dependencies),
+            summary=route.summary,
+            description=route.description,
+            response_description=route.response_description,
+            responses=dict(route.responses),
+            deprecated=route.deprecated,
+            operation_id=versioned_operation_id,
+            response_class=route.response_class,
+            include_in_schema=route.include_in_schema,
+        )
+        existing_keys.add(route_key)
+
+
+enable_structured_v1_api = os.getenv("ENABLE_STRUCTURED_V1_API", "1").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+structured_source_prefix = os.getenv("OPENENV_API_SOURCE_PREFIX", "/api")
+structured_target_prefix = os.getenv("OPENENV_API_V1_PREFIX", "/api/v1")
+if enable_structured_v1_api:
+    _mount_versioned_api_aliases(
+        app,
+        source_prefix=structured_source_prefix,
+        target_prefix=structured_target_prefix,
+    )
+
+# OpenEnv-native routes under /openenv so both contracts are visible
+# in a single Swagger UI without colliding with existing root endpoints.
+try:
+    from server.app import app as _openenv_app
+
+    app.include_router(_openenv_app.router, prefix="/openenv")
+except Exception:
+    # Keep primary app startup resilient even if optional OpenEnv adapter
+    # dependencies are unavailable in a minimal runtime.
+    pass
 
 # Direct top-level aliases for all /api/* routes
 for _alias, _endpoint, _method, _model in [

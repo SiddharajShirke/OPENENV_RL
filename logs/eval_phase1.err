@@ -1,0 +1,26 @@
+Traceback (most recent call last):
+  File "C:\Users\siddh\OPENENV_RL\rl\eval_grader.py", line 229, in <module>
+    main()
+    ~~~~^^
+  File "C:\Users\siddh\OPENENV_RL\rl\eval_grader.py", line 218, in main
+    evaluate_with_grader(
+    ~~~~~~~~~~~~~~~~~~~~^
+        model_path=model_path,
+        ^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+        save_plot=not args.no_plot,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\siddh\OPENENV_RL\rl\eval_grader.py", line 122, in evaluate_with_grader
+    obs, reward, terminated, truncated, _ = env.step(action_idx)
+                                            ~~~~~~~~^^^^^^^^^^^^
+  File "C:\Users\siddh\OPENENV_RL\rl\gov_workflow_env.py", line 130, in step
+    return self._to_array(obs_model), float(reward), terminated, truncated, info_dict
+           ~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "C:\Users\siddh\OPENENV_RL\rl\gov_workflow_env.py", line 141, in _to_array
+    return self._fb.build(obs, self._current_pm, self._last_at)
+           ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\siddh\OPENENV_RL\rl\feature_builder.py", line 102, in build
+    total_in_svc = max(getattr(snap, "total_pending", getattr(snap, "active_cases", 0)), 1)
+KeyboardInterrupt

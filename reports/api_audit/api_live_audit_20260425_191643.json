@@ -1,0 +1,947 @@
+{
+  "audit_name": "gov-workflow-openenv-live-http-audit",
+  "generated_at_utc": "2026-04-25T13:46:43.739558+00:00",
+  "base_url": "http://127.0.0.1:7860",
+  "summary": {
+    "total_checks": 16,
+    "passed": 16,
+    "failed": 0,
+    "pass_rate": 100.0
+  },
+  "context": {
+    "task_ids": [
+      "district_backlog_easy",
+      "mixed_urgency_medium",
+      "cross_department_hard"
+    ],
+    "session_id": "4f27d0f9-8712-40ad-b639-afe7e2a26577"
+  },
+  "checks": [
+    {
+      "name": "health",
+      "endpoint": "GET /health",
+      "expected_statuses": [
+        200
+      ],
+      "status_code": 200,
+      "passed": true,
+      "error": null,
+      "response_sample": {
+        "status": "ok",
+        "version": "2.0.0",
+        "phase": "3_rl_training",
+        "detail": null,
+        "active_sessions": 0,
+        "available_tasks": [
+          "district_backlog_easy",
+          "mixed_urgency_medium",
+          "cross_department_hard",
+          "district_backlog_easy_extreme"
+        ]
+      }
+    },
+    {
+      "name": "tasks",
+      "endpoint": "GET /tasks",
+      "expected_statuses": [
+        200
+      ],
+      "status_code": 200,
+      "passed": true,
+      "error": null,
+      "response_sample": [
+        {
+          "task_id": "district_backlog_easy",
+          "seed": 42,
+          "max_days": 30,
+          "services": [
+            "income_certificate"
+          ],
+          "officer_pool_total": 8,
+          "reserve_officers": 0,
+          "escalation_budget": 5,
+          "missing_docs_probability": 0.2,
+          "field_verification_probability": 0.15,
+          "scenario_mode": "normal",
+          "fairness_threshold": null
+        },
+        {
+          "task_id": "mixed_urgency_medium",
+          "seed": 123,
+          "max_days": 45,
+          "services": [
+            "income_certificate",
+            "land_registration"
+          ],
+          "officer_pool_total": 10,
+          "reserve_officers": 0,
+          "escalation_budget": 8,
+          "missing_docs_probability": 0.4,
+          "field_verification_probability": 0.475,
+          "scenario_mode": "normal",
+          "fairness_threshold": null
+        },
+        {
+          "task_id": "cross_department_hard",
+          "seed": 999,
+          "max_days": 60,
+          "services": [
+            "income_certificate",
+            "land_registration"
+          ],
+          "officer_pool_total": 12,
+          "reserve_officers": 0,
+          "escalation_budget": 10,
+          "missing_docs_probability": 0.4,
+          "field_verification_probability": 0.475,
+          "scenario_mode": "crisis",
+          "fairness_threshold": 0.7
+        }
+      ]
+    },
+    {
+      "name": "task_detail",
+      "endpoint": "GET /tasks/district_backlog_easy",
+      "expected_statuses": [
+        200
+      ],
+      "status_code": 200,
+      "passed": true,
+      "error": null,
+      "response_sample": {
+        "task_id": "district_backlog_easy",
+        "seed": 42,
+        "max_days": 30,
+        "services": [
+          "income_certificate"
+        ],
+        "officer_pool_total": 8,
+        "reserve_officers": 0,
+        "escalation_budget": 5,
+        "missing_docs_probability": 0.2,
+        "field_verification_probability": 0.15,
+        "scenario_mode": "normal",
+        "fairness_threshold": null
+      }
+    },
+    {
+      "name": "metrics",
+      "endpoint": "GET /metrics",
+      "expected_statuses": [
+        200
+      ],
+      "status_code": 200,
+      "passed": true,
+      "error": null,
+      "response_sample": {
+        "active_sessions": 0,
+        "tasks_available": [
+          "district_backlog_easy",
+          "mixed_urgency_medium",
+          "cross_department_hard"
+        ],
+        "total_tasks": 3,
+        "uptime_status": "ok",
+        "endpoints_total": 16,
+        "version": "2.0.0",
+        "phase": "3_rl_training",
+        "session_ids_active": []
+      }
+    },
+    {
+      "name": "actions_schema",
+      "endpoint": "GET /actions/schema",
+      "expected_statuses": [
+        200
+      ],
+      "status_code": 200,
+      "passed": true,
+      "error": null,
+      "response_sample": {
+        "total_action_types": 6,
+        "valid_services": [
+          "passport",
+          "driving_license",
+          "gst_registration",
+          "income_certificate",
+          "caste_certificate",
+          "birth_certificate",
+          "land_registration"
+        ],
+        "valid_priority_modes": [
+          "urgent_first",
+          "oldest_first",
+          "balanced",
+          "backlog_clearance"
+        ],
+        "actions": [
+          {
+            "action_type": "set_priority_mode",
+            "description": "Change how the queue is sorted for all services.",
+            "required_fields": [
+              "action_type",
+              "priority_mode"
+            ],
+            "optional_fields": [],
+            "notes": "Does not advance time. Call advance_time after.",
+            "example": {
+              "action_type": "set_priority_mode",
+              "priority_mode": "urgent_first"
+            }
+          },
+          {
+            "action_type": "assign_capacity",
+            "description": "Deploy one reserve officer to a service queue.",
+            "required_fields": [
+              "action_type",
+              "service",
+              "officer_delta"
+            ],
+            "optional_fields": [],
+            "notes": "Blocked if reserve_officers = 0. officer_delta must be 1.",
+            "example": {
+              "action_type": "assign_capacity",
+              "service": "passport",
+              "officer_delta": 1
+            }
+          },
+          {
+            "action_type": "request_missing_documents",
+            "description": "Unblock applications waiting for missing documents.",
+            "required_fields": [
+              "action_type",
+              "service"
+            ],
+            "optional_fields": [],
+            "notes": "Blocked if blocked_missing_docs = 0 for that service.",
+            "example": {
+              "action_type": "request_missing_documents",
+              "service": "driving_license"
+            }
+          },
+          {
+            "action_type": "escalate_service",
+            "description": "Mark one urgent case as emergency priority.",
+            "required_fields": [
+              "action_type",
+              "service"
+            ],
+            "optional_fields": [],
+            "notes": "Uses 1 escalation_budget_remaining. Blocked if budget=0.",
+            "example": {
+              "action_type": "escalate_service",
+              "service": "income_certificate"
+            }
+          },
+          {
+            "action_type": "reallocate_officers",
+            "description": "Move one officer from source service to target service.",
+            "required_fields": [
+              "action_type",
+              "service",
+              "target_service",
+              "officer_delta"
+            ],
+            "optional_fields": [],
+            "notes": "Source must have >= 2 officers. officer_delta must be 1.",
+            "example": {
+              "action_type": "reallocate_officers",
+              "service": "birth_certificate",
+              "target_service": "passport",
+              "officer_delta": 1
+            }
+          },
+          {
+            "action_type": "advance_time",
+            "description": "Simulate one working day. THE ONLY action that processes applications.",
+            "required_fields": [
+              "action_type"
+            ],
+            "optional_fields": [],
+            "notes": "Always valid. Call this every turn after admin actions.",
+            "example": {
+              "action_type": "advance_time"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "rl_models",
+      "endpoint": "GET /rl/models",
+      "expected_statuses": [
+        200
+      ],
+      "status_code": 200,
+      "passed": true,
+      "error": null,
+      "response_sample": [
+        {
+          "model_path": "C:\\Users\\siddh\\OPENENV_RL\\results\\best_model\\archived\\phase1_pre_retrain_20260425_151933\\best_grader_district_backlog_easy",
+          "task_id": "district_backlog_easy",
+          "phase": 1,
+          "size_mb": 2.121,
+          "exists": true
+        },
+        {
+          "model_path": "C:\\Users\\siddh\\OPENENV_RL\\results\\best_model\\archived\\phase1_pre_retrain_20260425_151933\\best_model",
+          "task_id": "district_backlog_easy",
+          "phase": 1,
+          "size_mb": 2.121,
+          "exists": true
+        },
+        {
+          "model_path": "C:\\Users\\siddh\\OPENENV_RL\\results\\best_model\\archived\\phase1_pre_retrain_20260425_151933\\phase1_final",
+          "task_id": "district_backlog_easy",
+          "phase": 1,
+          "size_mb": 2.122,
+          "exists": true
+        },
+        {
+          "model_path": "C:\\Users\\siddh\\OPENENV_RL\\results\\best_model\\best_grader_district_backlog_easy",
+          "task_id": "district_backlog_easy",
+          "phase": 0,
+          "size_mb": 2.122,
+          "exists": true
+        },
+        {
+          "model_path": "C:\\Users\\siddh\\OPENENV_RL\\results\\best_model\\best_grader_mixed_urgency_medium",
+          "task_id": "mixed_urgency_medium",
+          "phase": 0,
+          "size_mb": 2.122,
+          "exists": true
+        },
+        {
+          "model_path": "C:\\Users\\siddh\\OPENENV_RL\\results\\best_model\\best_grader_recurrent_mixed_urgency_medium",
+          "task_id": "mixed_urgency_medium",
+          "phase": 0,
+          "size_mb": 4.896,
+          "exists": true
+        },
+        {
+          "model_path": "C:\\Users\\siddh\\OPENENV_RL\\results\\best_model\\best_model",
+          "task_id": "district_backlog_easy",
+          "phase": 0,
+          "size_mb": 2.122,
+          "exists": true
+        },
+        {
+          "model_path": "C:\\Users\\siddh\\OPENENV_RL\\results\\best_model\\phase1_final",
+          "task_id": "district_backlog_easy",
+          "phase": 1,
+          "size_mb": 2.122,
+          "exists": true
+        },
+        {
+          "model_path": "C:\\Users\\siddh\\OPENENV_RL\\results\\best_model\\phase2_final",
+          "task_id": "district_backlog_easy",
+          "phase": 2,
+          "size_mb": 2.122,
+          "exists": true
+        },
+        {
+          "model_path": "C:\\Users\\siddh\\OPENENV_RL\\results\\best_model\\phase3_final",
+          "task_id": "district_backlog_easy",
+          "phase": 3,
+          "size_mb": 4.896,
+          "exists": true
+        }
+      ]
+    },
+    {
+      "name": "reset",
+      "endpoint": "POST /reset",
+      "expected_statuses": [
+        200
+      ],
+      "status_code": 200,
+      "passed": true,
+      "error": null,
+      "response_sample": {
+        "session_id": "4f27d0f9-8712-40ad-b639-afe7e2a26577",
+        "task_id": "district_backlog_easy",
+        "seed": 42,
+        "observation": {
+          "task_id": "district_backlog_easy",
+          "episode_id": "district_backlog_easy-s42-9645a2",
+          "day": 0,
+          "max_days": 30,
+          "scenario_mode": "normal",
+          "officer_pool": {
+            "total_officers": 8,
+            "available_officers": 8,
+            "allocated": {
+              "income_certificate": 8
+            },
+            "pending_reallocation": {}
+          },
+          "queue_snapshots": {
+            "income_certificate": {
+              "service_type": "income_certificate",
+              "public_stage_counts": {
+                "submission": 0,
+                "document_verification": 0,
+                "field_verification": 0,
+                "approval": 0,
+                "issuance": 0
+              },
+              "total_pending": 0,
+              "total_completed_today": 0,
+              "total_sla_breached": 0,
+              "urgent_pending": 0,
+              "blocked_missing_docs": 0,
+              "blocked_enrichment": 0,
+              "field_verification_pending": 0,
+              "oldest_case_age_days": 0,
+              "avg_waiting_days": 0.0,
+              "current_sla_risk": 0.0
+            }
+          },
+          "total_backlog": 0,
+          "total_completed": 0,
+          "total_sla_breaches": 0,
+          "total_rejected": 0,
+          "escalation_budget_remaining": 5,
+          "backlog_pressure": 0.0,
+          "sla_risk_score": 0.0,
+          "fairness_index": 1.0,
+          "resource_utilization": 1.0,
+          "digital_intake_ratio": 0.5,
+          "blocked_cases_missing_docs": 0,
+          "blocked_cases_enrichment": 0,
+          "field_verification_load": 0.0,
+          "active_events": [],
+          "last_action_valid": true,
+          "last_action_message": "reset",
+          "last_action_explanation": "",
+          "pending_doc_resolutions": 0,
+          "pending_enrichment_lookups": 0,
+          "pending_officer_reallocations": 0
+        },
+        "info": {
+          "task_id": "district_backlog_easy",
+          "seed": 42,
+          "episode_id": "district_backlog_easy-s42-9645a2",
+          "max_days": 30
+        }
+      }
+    },
+    {
+      "name": "action_masks",
+      "endpoint": "POST /action-masks",
+      "expected_statuses": [
+        200
+      ],
+      "status_code": 200,
+      "passed": true,
+      "error": null,
+      "response_sample": {
+        "session_id": "4f27d0f9-8712-40ad-b639-afe7e2a26577",
+        "action_mask": [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        "valid_action_indices": [
+          18
+        ],
+        "valid_action_labels": [
+          "advance_time"
+        ],
+        "total_valid": 1,
+        "total_actions": 28
+      }
+    },
+    {
+      "name": "step",
+      "endpoint": "POST /step",
+      "expected_statuses": [
+        200
+      ],
+      "status_code": 200,
+      "passed": true,
+      "error": null,
+      "response_sample": {
+        "session_id": "4f27d0f9-8712-40ad-b639-afe7e2a26577",
+        "observation": {
+          "task_id": "district_backlog_easy",
+          "episode_id": "district_backlog_easy-s42-9645a2",
+          "day": 1,
+          "max_days": 30,
+          "scenario_mode": "normal",
+          "officer_pool": {
+            "total_officers": 8,
+            "available_officers": 8,
+            "allocated": {
+              "income_certificate": 8
+            },
+            "pending_reallocation": {}
+          },
+          "queue_snapshots": {
+            "income_certificate": {
+              "service_type": "income_certificate",
+              "public_stage_counts": {
+                "submission": 4,
+                "document_verification": 8,
+                "field_verification": 0,
+                "approval": 0,
+                "issuance": 0
+              },
+              "total_pending": 12,
+              "total_completed_today": 0,
+              "total_sla_breached": 0,
+              "urgent_pending": 2,
+              "blocked_missing_docs": 2,
+              "blocked_enrichment": 0,
+              "field_verification_pending": 0,
+              "oldest_case_age_days": 1,
+              "avg_waiting_days": 1.0,
+              "current_sla_risk": 0.0
+            }
+          },
+          "total_backlog": 12,
+          "total_completed": 0,
+          "total_sla_breaches": 0,
+          "total_rejected": 0,
+          "escalation_budget_remaining": 5,
+          "backlog_pressure": 0.3,
+          "sla_risk_score": 0.0,
+          "fairness_index": 1.0,
+          "resource_utilization": 1.0,
+          "digital_intake_ratio": 0.75,
+          "blocked_cases_missing_docs": 2,
+          "blocked_cases_enrichment": 0,
+          "field_verification_load": 0.0,
+          "active_events": [
+            "no_event"
+          ],
+          "last_action_valid": true,
+          "last_action_message": "Day 1 simulated",
+          "last_action_explanation": "Day 1 simulated",
+          "pending_doc_resolutions": 0,
+          "pending_enrichment_lookups": 0,
+          "pending_officer_reallocations": 0
+        },
+        "reward": 5.22,
+        "done": false,
+        "terminated": false,
+        "truncated": false,
+        "info": {
+          "reward_breakdown": {
+            "total_reward": 5.22,
+            "progress_reward": 5.6,
+            "completion_reward": 0.0,
+            "recovery_reward": 0.0,
+            "stability_bonus": 0.1,
+            "waiting_penalty": -0.48,
+            "sla_penalty": -0.0,
+            "fairness_penalty": -0.0,
+            "invalid_action_penalty": -0.0,
+            "idle_capacity_penalty": -0.0,
+            "oscillation_penalty": -0.0
+          },
+          "newly_arrived_cases": 12,
+          "newly_completed_cases": 0,
+          "newly_sla_breached_cases": 0,
+          "newly_resolved_doc_cases": 0,
+          "invalid_action": false,
+          "action_explanation": "Day 1 simulated",
+          "active_events": [
+            "no_event"
+          ],
+          "grader_preview_score": 0.0,
+          "effects_resolved_this_step": []
+        }
+      }
+    },
+    {
+      "name": "state",
+      "endpoint": "GET /state?session_id=4f27d0f9-8712-40ad-b639-afe7e2a26577&include_action_history=true",
+      "expected_statuses": [
+        200
+      ],
+      "status_code": 200,
+      "passed": true,
+      "error": null,
+      "response_sample": {
+        "session_id": "4f27d0f9-8712-40ad-b639-afe7e2a26577",
+        "state": {
+          "episode_id": "district_backlog_easy-s42-9645a2",
+          "task_id": "district_backlog_easy",
+          "seed": 42,
+          "scenario_mode": "normal",
+          "day": 1,
+          "max_days": 30,
+          "terminated": false,
+          "truncated": false,
+          "total_steps": 1,
+          "total_completed": 0,
+          "total_backlog": 12,
+          "total_sla_breaches": 0,
+          "total_rejected": 0,
+          "action_history_count": 1,
+          "cumulative_reward": 5.22,
+          "cumulative_reward_breakdown": {
+            "total_reward": 0.0,
+            "progress_reward": 0.0,
+            "completion_reward": 0.0,
+            "recovery_reward": 0.0,
+            "stability_bonus": 0.0,
+            "waiting_penalty": 0.0,
+            "sla_penalty": 0.0,
+            "fairness_penalty": 0.0,
+            "invalid_action_penalty": 0.0,
+            "idle_capacity_penalty": 0.0,
+            "oscillation_penalty": 0.0
+          },
+          "officer_pool": {
+            "total_officers": 8,
+            "available_officers": 8,
+            "allocated": {
+              "income_certificate": 8
+            },
+            "pending_reallocation": {}
+          },
+          "pending_effects_count": 0,
+          "active_events_today": [],
+          "fairness_gap": 0.0,
+          "total_arrived": 12,
+          "total_docs_requested": 0,
+          "total_docs_cleared": 0,
+          "total_idle_officer_days": 0,
+          "total_capacity_days": 8,
+          "total_urgent_arrived": 2,
+          "total_urgent_completed": 0,
+          "total_escalations_used": 0,
+          "total_wasted_escalations": 0,
+          "total_invalid_actions": 0,
+          "avg_waiting_days": 0.0,
+          "action_history": [
+            {
+              "step": 1,
+              "day": 1,
+              "action": {
+                "action_type": "advance_time",
+                "service_target": null,
+                "priority_mode": null,
+                "reallocation_delta": null,
+                "escalation_target": null,
+                "capacity_assignment": null,
+                "notes": null
+              },
+              "invalid": false,
+              "message": "Day 1 simulated",
+              "reward": 5.22
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "simulate_stream",
+      "endpoint": "POST /simulate",
+      "expected_statuses": [
+        200
+      ],
+      "status_code": 200,
+      "passed": true,
+      "error": null,
+      "response_sample": {
+        "sse_rows_sample": [
+          {
+            "step": 1,
+            "day": 1,
+            "action_type": "advance_time",
+            "action_payload": {
+              "action_type": "advance_time"
+            },
+            "reward": 5.22,
+            "done": false,
+            "backlog": 12,
+            "completed": 0,
+            "sla_breaches": 0,
+            "fairness_gap": 1.0,
+            "escalation_budget_remaining": 5,
+            "invalid_action": false,
+            "last_action_error": "Day 1 simulated",
+            "queue_rows": [
+              {
+                "service": "income_certificate",
+                "active_cases": 12,
+                "missing_docs_cases": 2,
+                "urgent_cases": 2,
+                "breached_cases": 0,
+                "avg_age_days": 1.0
+              }
+            ],
+            "decision_source": "baseline_policy",
+            "provider": "local_policy",
+            "model_used": "backlog_clearance",
+            "llm_attempts": 0,
+            "llm_error": null,
+            "llm_key_label": null
+          },
+          {
+            "step": 2,
+            "day": 1,
+            "action_type": "request_missing_documents",
+            "action_payload": {
+              "action_type": "request_missing_documents",
+              "service_target": "income_certificate"
+            },
+            "reward": -0.48,
+            "done": false,
+            "backlog": 12,
+            "completed": 0,
+            "sla_breaches": 0,
+            "fairness_gap": 1.0,
+            "escalation_budget_remaining": 5,
+            "invalid_action": false,
+            "last_action_error": "Sent missing-doc requests for 2 case(s) in income_certificate",
+            "queue_rows": [
+              {
+                "service": "income_certificate",
+                "active_cases": 12,
+                "missing_docs_cases": 2,
+                "urgent_cases": 2,
+                "breached_cases": 0,
+                "avg_age_days": 1.0
+              }
+            ],
+            "decision_source": "baseline_policy",
+            "provider": "local_policy",
+            "model_used": "backlog_clearance",
+            "llm_attempts": 0,
+            "llm_error": null,
+            "llm_key_label": null
+          },
+          {
+            "step": 3,
+            "day": 1,
+            "action_type": "request_missing_documents",
+            "action_payload": {
+              "action_type": "request_missing_documents",
+              "service_target": "income_certificate"
+            },
+            "reward": -0.48,
+            "done": true,
+            "backlog": 12,
+            "completed": 0,
+            "sla_breaches": 0,
+            "fairness_gap": 1.0,
+            "escalation_budget_remaining": 5,
+            "invalid_action": false,
+            "last_action_error": "Sent missing-doc requests for 2 case(s) in income_certificate",
+            "queue_rows": [
+              {
+                "service": "income_certificate",
+                "active_cases": 12,
+                "missing_docs_cases": 2,
+                "urgent_cases": 2,
+                "breached_cases": 0,
+                "avg_age_days": 1.0
+              }
+            ],
+            "decision_source": "baseline_policy",
+            "provider": "local_policy",
+            "model_used": "backlog_clearance",
+            "llm_attempts": 0,
+            "llm_error": null,
+            "llm_key_label": null
+          }
+        ],
+        "has_step": true,
+        "has_done": true
+      }
+    },
+    {
+      "name": "simulate_snapshot",
+      "endpoint": "GET /simulate/4f27d0f9-8712-40ad-b639-afe7e2a26577/snapshot",
+      "expected_statuses": [
+        200
+      ],
+      "status_code": 200,
+      "passed": true,
+      "error": null,
+      "response_sample": {
+        "session_id": "4f27d0f9-8712-40ad-b639-afe7e2a26577",
+        "task_id": "district_backlog_easy",
+        "seed": 42,
+        "terminated": false,
+        "truncated": false,
+        "step_trace_len": 1,
+        "observation": {
+          "task_id": "district_backlog_easy",
+          "episode_id": "district_backlog_easy-s42-9645a2",
+          "day": 1,
+          "max_days": 30,
+          "scenario_mode": "normal",
+          "officer_pool": {
+            "total_officers": 8,
+            "available_officers": 8,
+            "allocated": {
+              "income_certificate": 8
+            },
+            "pending_reallocation": {}
+          },
+          "queue_snapshots": {
+            "income_certificate": {
+              "service_type": "income_certificate",
+              "public_stage_counts": {
+                "submission": 4,
+                "document_verification": 8,
+                "field_verification": 0,
+                "approval": 0,
+                "issuance": 0
+              },
+              "total_pending": 12,
+              "total_completed_today": 0,
+              "total_sla_breached": 0,
+              "urgent_pending": 2,
+              "blocked_missing_docs": 2,
+              "blocked_enrichment": 0,
+              "field_verification_pending": 0,
+              "oldest_case_age_days": 1,
+              "avg_waiting_days": 1.0,
+              "current_sla_risk": 0.0
+            }
+          },
+          "total_backlog": 12,
+          "total_completed": 0,
+          "total_sla_breaches": 0,
+          "total_rejected": 0,
+          "escalation_budget_remaining": 5,
+          "backlog_pressure": 0.3,
+          "sla_risk_score": 0.0,
+          "fairness_index": 1.0,
+          "resource_utilization": 1.0,
+          "digital_intake_ratio": 0.75,
+          "blocked_cases_missing_docs": 2,
+          "blocked_cases_enrichment": 0,
+          "field_verification_load": 0.0,
+          "active_events": [],
+          "last_action_valid": true,
+          "last_action_message": "Day 1 simulated",
+          "last_action_explanation": "Day 1 simulated",
+          "pending_doc_resolutions": 0,
+          "pending_enrichment_lookups": 0,
+          "pending_officer_reallocations": 0
+        }
+      }
+    },
+    {
+      "name": "simulate_trace",
+      "endpoint": "GET /simulate/4f27d0f9-8712-40ad-b639-afe7e2a26577/trace?page=1&page_size=20",
+      "expected_statuses": [
+        200
+      ],
+      "status_code": 200,
+      "passed": true,
+      "error": null,
+      "response_sample": {
+        "session_id": "4f27d0f9-8712-40ad-b639-afe7e2a26577",
+        "total_steps": 1,
+        "page": 1,
+        "page_size": 20,
+        "total_pages": 1,
+        "steps": [
+          {
+            "step": 1,
+            "day": 1,
+            "action_type": "advance_time",
+            "service": null,
+            "reward": 5.22,
+            "total_backlog": 12,
+            "total_completed": 0,
+            "total_sla_breaches": 0,
+            "last_action_valid": true,
+            "notes": "Day 1 simulated"
+          }
+        ]
+      }
+    },
+    {
+      "name": "grade",
+      "endpoint": "POST /grade",
+      "expected_statuses": [
+        200
+      ],
+      "status_code": 200,
+      "passed": true,
+      "error": null,
+      "response_sample": {
+        "session_id": "4f27d0f9-8712-40ad-b639-afe7e2a26577",
+        "task_id": "district_backlog_easy",
+        "score": 0.55,
+        "grader_name": "easy",
+        "metrics": {
+          "completion_rate": 0.0,
+          "sla_compliance_rate": 1.0,
+          "idle_efficiency": 1.0,
+          "document_rework_quality": 1.0,
+          "urgent_served_rate": 0.0,
+          "fairness_score": 1.0,
+          "escalation_discipline": 1.0,
+          "fairness_gap": 0.0,
+          "total_cases_arrived": 12.0,
+          "total_completed": 0.0,
+          "total_sla_breached": 0.0,
+          "total_rejected": 0.0,
+          "avg_waiting_days": 0.0
+        }
+      }
+    },
+    {
+      "name": "rl_run_missing_model_guardrail",
+      "endpoint": "POST /rl/run",
+      "expected_statuses": [
+        422
+      ],
+      "status_code": 422,
+      "passed": true,
+      "error": "HTTP Error 422: Unprocessable Content",
+      "response_sample": {
+        "detail": "Model not found at 'C:\\Users\\siddh\\OPENENV_RL\\results\\best_model\\does_not_exist.zip'"
+      }
+    },
+    {
+      "name": "simulate_cancel",
+      "endpoint": "POST /simulate/4f27d0f9-8712-40ad-b639-afe7e2a26577/cancel",
+      "expected_statuses": [
+        200
+      ],
+      "status_code": 200,
+      "passed": true,
+      "error": null,
+      "response_sample": {
+        "session_id": "4f27d0f9-8712-40ad-b639-afe7e2a26577",
+        "status": "cancelled"
+      }
+    }
+  ]
+}
