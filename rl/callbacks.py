@@ -13,7 +13,7 @@ from stable_baselines3.common.callbacks import BaseCallback
 from sb3_contrib.common.maskable.callbacks import MaskableEvalCallback
 from typing import Any
 
-from rl.gym_wrapper import GovWorkflowGymEnv
+from rl.gov_workflow_env import GovWorkflowGymEnv
 from rl.cost_tracker import THRESHOLD_SLA, THRESHOLD_FAIRNESS
 
 

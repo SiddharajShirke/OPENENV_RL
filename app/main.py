@@ -536,7 +536,7 @@ class RLEvaluateResponse(BaseModel):
 
 class SimulationRequest(BaseModel):
     task_id: str = Field(default=env_settings.default_task_id)
-    agent_mode: SimulationAgentMode = Field(default=SimulationAgentMode.baseline_policy)
+    agent_mode: SimulationAgentMode = Field(default=SimulationAgentMode.BASELINE_POLICY)
     max_steps: int = Field(default=80, ge=1, le=500)
     seed: int | None = Field(default=None)
     policy_name: str = Field(default="backlog_clearance")
@@ -951,7 +951,7 @@ def api_auto_step(body: AutoStepRequest) -> AutoStepResponse:
             detail="Episode has already ended. Call /api/reset first.",
         )
     policy = resolve_policy_or_422(body.agent_policy)
-    obs = env.build_observation()
+    obs = env._build_observation()
     action = policy(obs)
     next_obs, reward, terminated, truncated, info = env.step(action)
     return AutoStepResponse(
@@ -1015,11 +1015,11 @@ def api_benchmark(body: BenchmarkRequest) -> BenchmarkResponse:
             run_rows.append(BenchmarkAgentRun(
                 run_index=run_idx + 1,
                 seed=seed,
-                score=float(result.score),
-                reward_sum=float(result.reward_sum),
-                completed=int(result.completed),
-                backlog=int(result.backlog),
-                steps=int(result.steps),
+                score=float(result["score"]),
+                reward_sum=float(result["reward_sum"]),
+                completed=int(result["completed"]),
+                backlog=int(result["backlog"]),
+                steps=int(result["steps"]),
             ))
         scores = [r.score for r in run_rows]
         agent_results.append(BenchmarkAgentSummary(
@@ -1071,6 +1071,53 @@ def api_workflow_components() -> WorkflowComponentsResponse:
         ),
     ]
     return WorkflowComponentsResponse(components=components)
+
+
+
+@api.post("/workflows/run", response_model=WorkflowRunResponse, summary="Execute a workflow component as a subprocess")
+def api_workflow_run(body: WorkflowRunRequest) -> WorkflowRunResponse:
+    repo_root = REPO_ROOT
+    python_bin = shutil.which("python") or "python"
+    
+    cmd = []
+    if body.workflow_id == "baseline_openai":
+        cmd = [python_bin, "baseline_openai.py", "--task", "district_backlog_easy"]
+    elif body.workflow_id == "inference":
+        cmd = [python_bin, "inference.py", "--max-steps", str(body.max_steps)]
+    elif body.workflow_id == "phase2_eval":
+        cmd = [python_bin, "-m", "rl.evaluate", "--model", body.model_path, "--episodes", str(body.episodes), "--model-type", body.model_type]
+    
+    start_t = time.time()
+    try:
+        proc = subprocess.run(
+            cmd,
+            cwd=str(repo_root),
+            capture_output=True,
+            text=True,
+            timeout=body.timeout_seconds,
+            check=False,
+        )
+        duration = time.time() - start_t
+        return WorkflowRunResponse(
+            workflow_id=body.workflow_id,
+            command=cmd,
+            exit_code=proc.returncode,
+            duration_seconds=round(duration, 3),
+            stdout=proc.stdout or "",
+            stderr=proc.stderr or "",
+            timed_out=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        duration = time.time() - start_t
+        return WorkflowRunResponse(
+            workflow_id=body.workflow_id,
+            command=cmd,
+            exit_code=-1,
+            duration_seconds=round(duration, 3),
+            stdout=exc.stdout or "",
+            stderr=exc.stderr or "",
+            timed_out=True,
+        )
 
 
 @api.get("/openenv_compliance", response_model=OpenEnvComplianceResponse, summary="Check OpenEnv interface compliance")
@@ -1186,7 +1233,7 @@ def api_rl_run(body: RLRunRequest) -> RLRunResponse:
     model = load_model_cached_or_503(model_path, body.model_type)
     try:
         import numpy as np
-        from rl.gym_wrapper import GovWorkflowGymEnv
+        from rl.gov_workflow_env import GovWorkflowGymEnv
     except ModuleNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -1310,7 +1357,7 @@ def api_simulation_run(body: SimulationRequest) -> SimulationResponse:
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Unknown task_id '{body.task_id}'.",
         )
-    if body.agent_mode == SimulationAgentMode.baseline_policy and body.policy_name not in POLICIES:
+    if body.agent_mode == SimulationAgentMode.BASELINE_POLICY and body.policy_name not in POLICIES:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Unknown policy_name '{body.policy_name}'. Available: {sorted(POLICIES.keys())}",
@@ -1370,7 +1417,7 @@ def api_simulation_live_start(body: SimulationLiveStartRequest) -> SimulationLiv
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Unknown task_id '{body.task_id}'.",
         )
-    if body.agent_mode == SimulationAgentMode.baseline_policy and body.policy_name not in POLICIES:
+    if body.agent_mode == SimulationAgentMode.BASELINE_POLICY and body.policy_name not in POLICIES:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Unknown policy_name '{body.policy_name}'. Available: {sorted(POLICIES.keys())}",
@@ -1415,7 +1462,7 @@ def api_simulation_live_start(body: SimulationLiveStartRequest) -> SimulationLiv
         agent_mode=run.agent_mode,
         seed=run.seed,
         max_steps=run.max_steps,
-        start_log=run.start_line,
+        start_log=run.start_line()["log"],
         route_plan=list(run.llm_route),
     )
 
@@ -1688,7 +1735,7 @@ def api_history_comparison_repair(comparison_id: str) -> ComparisonHistoryRepair
         try:
             for i in range(runs):
                 seed = seed_base + i
-                sim = run_simulation(task_id=task_id, agent_mode=SimulationAgentMode.llm_inference,
+                sim = run_simulation(task_id=task_id, agent_mode=SimulationAgentMode.LLM_INFERENCE,
                                      max_steps=steps, seed=seed, policy_name="backlog_clearance")
                 llm_runs.append({
                     "run_index": i + 1,
@@ -1741,6 +1788,7 @@ for _alias, _endpoint, _method, _model in [
     ("/training_jobs",             api_training_jobs,             "GET",    TrainingJobsListResponse),
     ("/history/simulations",       api_history_simulations,       "GET",    SimulationHistoryListResponse),
     ("/history/comparisons",       api_history_comparisons,       "GET",    ComparisonHistoryListResponse),
+    ("/workflows/run",             api_workflow_run,              "POST",   WorkflowRunResponse),
 ]:
     if _method == "GET":
         app.get(_alias, response_model=_model, include_in_schema=False)(_endpoint)

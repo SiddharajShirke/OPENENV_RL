@@ -9,7 +9,7 @@ Phase 5 : Hierarchical RL
 
 from rl.feature_builder import FeatureBuilder, OBS_DIM, N_ACTIONS
 from rl.action_mask import ActionMaskComputer
-from rl.gym_wrapper import GovWorkflowGymEnv
+from rl.gov_workflow_env import GovWorkflowGymEnv
 
 __all__ = [
     "FeatureBuilder",

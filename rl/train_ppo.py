@@ -17,7 +17,7 @@ from stable_baselines3.common.vec_env import DummyVecEnv
 from stable_baselines3.common.monitor import Monitor
 from sb3_contrib import MaskablePPO
 
-from rl.gym_wrapper import GovWorkflowGymEnv
+from rl.gov_workflow_env import GovWorkflowGymEnv
 from rl.callbacks import GovWorkflowEvalCallback, CostMonitorCallback
 from rl.curriculum import CurriculumScheduler, CurriculumConfig
 

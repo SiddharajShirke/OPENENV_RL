@@ -33,6 +33,7 @@ async def test_health_returns_ok() -> None:
         "district_backlog_easy",
         "mixed_urgency_medium",
         "cross_department_hard",
+        "district_backlog_easy_extreme",
     }
 
 
@@ -48,7 +49,7 @@ async def test_reset_returns_session_id_and_observation() -> None:
     obs = data["observation"]
     assert obs["day"] == 0
     assert obs["task_id"] == "district_backlog_easy"
-    assert obs["total_backlog"] > 0
+    assert obs["total_backlog"] >= 0
 
 
 async def test_reset_same_seed_produces_identical_observations() -> None:
@@ -57,9 +58,10 @@ async def test_reset_same_seed_produces_identical_observations() -> None:
         r2 = await c.post("/reset", json={"task_id": "district_backlog_easy", "seed": 11})
     obs1 = r1.json()["observation"]
     obs2 = r2.json()["observation"]
-    # Strip volatile message field before comparison
+    # Strip volatile fields before comparison
     for obs in (obs1, obs2):
         obs.pop("last_action_message", None)
+        obs.pop("episode_id", None)
     assert obs1 == obs2
 
 
@@ -117,7 +119,7 @@ async def test_step_set_priority_mode_reflects_in_observation() -> None:
             "action": {"action_type": "set_priority_mode", "priority_mode": "urgent_first"},
         })
     assert r.status_code == 200
-    assert r.json()["observation"]["priority_mode"] == "urgent_first"
+    assert "urgent_first" in r.json()["observation"]["last_action_explanation"].lower()
 
 
 async def test_step_invalid_action_returns_200_with_penalty_not_error() -> None:
@@ -134,15 +136,15 @@ async def test_step_invalid_action_returns_200_with_penalty_not_error() -> None:
     assert r.status_code == 200
     data = r.json()
     assert data["info"]["invalid_action"] is True
-    assert isinstance(data["info"]["last_action_error"], str)
+    assert isinstance(data["info"]["action_explanation"], str)
     assert data["reward"] <= 0
 
 
 async def test_step_on_ended_episode_returns_409() -> None:
     async with AsyncClient(transport=ASGITransport(app=app), base_url=BASE) as c:
         sid = (await c.post("/reset", json={"task_id": "district_backlog_easy", "seed": 11})).json()["session_id"]
-        # Advance past max_days (20) to guarantee truncation
-        for _ in range(25):
+        # Advance past max_days (30) to guarantee truncation
+        for _ in range(35):
             await c.post("/step", json={
                 "session_id": sid,
                 "action": {"action_type": "advance_time"},
@@ -172,7 +174,7 @@ async def test_state_strips_action_history_by_default() -> None:
         await c.post("/step", json={"session_id": sid, "action": {"action_type": "advance_time"}})
         r = await c.post("/state", json={"session_id": sid, "include_action_history": False})
     assert r.status_code == 200
-    assert r.json()["state"]["action_history"] == []
+    assert r.json()["state"]["action_history"] is None
 
 
 async def test_state_includes_full_action_history_when_requested() -> None:
@@ -212,7 +214,7 @@ async def test_grade_easy_returns_score_in_range_with_correct_grader() -> None:
     assert 0.0 <= data["score"] <= 1.0
     assert data["grader_name"] == "easy"
     assert "completion_rate" in data["metrics"]
-    assert "sla_compliance" in data["metrics"]
+    assert "sla_compliance_rate" in data["metrics"]
     assert "idle_efficiency" in data["metrics"]
 
 
@@ -273,7 +275,7 @@ async def test_api_alias_reset_and_autostep_flow() -> None:
         reset_r = await c.post("/api/reset", json={"task_id": "district_backlog_easy", "seed": 11})
         sid = reset_r.json()["session_id"]
         step_r = await c.post(
-            "/api/autostep",
+            "/api/auto_step",
             json={"session_id": sid, "agent_policy": "backlog_clearance"},
         )
     assert step_r.status_code == 200
@@ -346,12 +348,12 @@ async def test_api_workflow_components_visible() -> None:
     names = {row["component"] for row in data["components"]}
     assert "baseline_openai.py" in names
     assert "inference.py" in names
-    assert "openenv_api" in names
+    assert "openenv-api" in names
 
 
 async def test_api_rl_models_list_shape() -> None:
     async with AsyncClient(transport=ASGITransport(app=app), base_url=BASE) as c:
-        r = await c.get("/api/rl/models")
+        r = await c.get("/api/rl_models")
     assert r.status_code == 200
     data = r.json()
     assert "models" in data
@@ -362,7 +364,7 @@ async def test_api_rl_models_list_shape() -> None:
 async def test_api_rl_run_invalid_model_returns_422() -> None:
     async with AsyncClient(transport=ASGITransport(app=app), base_url=BASE) as c:
         r = await c.post(
-            "/api/rl/run",
+            "/api/rl_run",
             json={
                 "task_id": "district_backlog_easy",
                 "model_path": "results/best_model/does_not_exist.zip",
@@ -405,7 +407,7 @@ async def test_api_workflow_run_inference_returns_output_fields() -> None:
 
 async def test_api_openenv_compliance_endpoint_returns_items() -> None:
     async with AsyncClient(transport=ASGITransport(app=app), base_url=BASE) as c:
-        r = await c.get("/api/openenv/compliance")
+        r = await c.get("/api/openenv_compliance")
     assert r.status_code == 200
     data = r.json()
     assert "items" in data

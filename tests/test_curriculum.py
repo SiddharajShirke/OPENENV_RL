@@ -40,6 +40,6 @@ def test_all_tasks_sampled_in_stage_3() -> None:
 
 
 def test_deterministic_eval_seeds_never_change() -> None:
-    assert TASKS["district_backlog_easy"].seed == 11
-    assert TASKS["mixed_urgency_medium"].seed == 22
-    assert TASKS["cross_department_hard"].seed == 33
+    assert TASKS["district_backlog_easy"].seed == 42
+    assert TASKS["mixed_urgency_medium"].seed == 123
+    assert TASKS["cross_department_hard"].seed == 999

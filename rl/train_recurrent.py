@@ -24,7 +24,7 @@ from sb3_contrib import MaskablePPO, RecurrentPPO
 
 from rl.callbacks import CostMonitorCallback, RecurrentEvalCallback
 from rl.curriculum import CurriculumConfig, CurriculumScheduler
-from rl.gym_wrapper import GovWorkflowGymEnv
+from rl.gov_workflow_env import GovWorkflowGymEnv
 
 os.makedirs("results/runs", exist_ok=True)
 os.makedirs("results/best_model", exist_ok=True)

@@ -70,9 +70,10 @@ class EpisodeMetrics:
 
 
 class GovWorkflowEnv:
-    def __init__(self, task_id: str = "district_backlog_easy") -> None:
+    def __init__(self, task_id: str = "district_backlog_easy", seed: int | None = None) -> None:
         self.task_id = task_id
         self.task: TaskConfig = get_task(task_id)
+        self.seed = seed
         self._init_episode_state()
 
     def reset(
@@ -137,8 +138,12 @@ class GovWorkflowEnv:
 
     def step(
         self,
-        action: ActionModel,
+        action: ActionModel | dict,
     ) -> tuple[ObservationModel, float, bool, bool, StepInfoModel]:
+        if isinstance(action, dict):
+            from app.models import ActionModel
+            action = ActionModel(**action)
+            
         if self.terminated or self.truncated:
             raise RuntimeError("Episode ended — call reset() before stepping.")
 

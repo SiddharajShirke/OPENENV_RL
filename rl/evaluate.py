@@ -17,7 +17,7 @@ import numpy as np
 from sb3_contrib import MaskablePPO, RecurrentPPO
 from sb3_contrib.common.maskable.utils import get_action_masks
 
-from rl.gym_wrapper import GovWorkflowGymEnv
+from rl.gov_workflow_env import GovWorkflowGymEnv
 from app.graders import grade_episode
 from app.tasks import TASKS
 
