@@ -117,6 +117,13 @@ Environment endpoints:
 - `POST /state`
 - `POST /grade`
 
+Structured API aliases (non-breaking, same handlers):
+
+- `POST /api/reset` and `POST /api/v1/reset`
+- `POST /api/step` and `POST /api/v1/step`
+- `POST /api/state` and `POST /api/v1/state`
+- `POST /api/grade` and `POST /api/v1/grade`
+
 Validation:
 
 ```bash
@@ -387,6 +394,14 @@ Fill required keys depending on chosen provider:
 - optional NVIDIA keys:
   - `NVIDIA_API_KEY`
   - `NVIDIA_API_KEY_2`
+
+Optional gateway transport keys (for `inference.py` / `baseline_openai.py`):
+
+- `OPENENV_ENV_TRANSPORT` = `auto` | `http` | `direct`
+- `OPENENV_ENV_BASE_URL` = FastAPI host, for example `http://127.0.0.1:7860`
+- `OPENENV_ENV_API_PREFIX` = `""` or `/api` or `/api/v1`
+- `OPENENV_ENV_API_PREFIX_CANDIDATES` = comma-separated probe order (optional)
+- `FORCE_FASTAPI_GATEWAY` = `1` to block direct fallback
 
 ### Run (recommended)
 

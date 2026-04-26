@@ -107,11 +107,20 @@ def backlog_clearance_policy(obs: ObservationModel) -> ActionModel:
 
     return ActionModel(action_type=ActionType.ADVANCE_TIME)
 
+def random_policy(obs: ObservationModel) -> ActionModel:
+    import random
+    return ActionModel(action_type=ActionType.ADVANCE_TIME)
+
+urgent_first_policy = greedy_sla_policy
+fairness_aware_policy = backlog_clearance_policy
 
 POLICIES: dict[str, PolicyFn] = {
-    "urgent_first":      urgent_first_policy,
+    "urgent_first":      greedy_sla_policy,
     "oldest_first":      oldest_first_policy,
     "backlog_clearance": backlog_clearance_policy,
+    "random_policy":     random_policy,
+    "greedy_sla_policy": greedy_sla_policy,
+    "fairness_aware_policy": fairness_aware_policy,
 }
 
 

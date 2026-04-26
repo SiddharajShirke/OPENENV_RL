@@ -22,25 +22,25 @@ def _make_obs(
     urgent_counts      = urgent_counts or {}
     active_cases_by_service = active_cases_by_service or {svc.value: 10 for svc in services}
     allocations = allocations or {svc: 1 for svc in services}
-    snapshots = [
-        SimpleNamespace(
-            service=svc,
-            active_cases=active_cases_by_service.get(svc.value, 0),
-            avg_age_days=3.0,
-            urgent_cases=urgent_counts.get(svc.value, 2),
-            missing_docs_cases=missing_doc_counts.get(svc.value, 0),
+    snapshots = {
+        svc.value: SimpleNamespace(
+            service_type=svc,
+            total_pending=active_cases_by_service.get(svc.value, 0),
+            avg_waiting_days=3.0,
+            urgent_pending=urgent_counts.get(svc.value, 2),
+            blocked_missing_docs=missing_doc_counts.get(svc.value, 0),
             escalated_cases=0,
-            stage_counts={},
+            public_stage_counts={},
         )
         for svc in services
-    ]
+    }
     return SimpleNamespace(
         queue_snapshots=snapshots,
         escalation_budget_remaining=escalation_budget,
         officer_pool=SimpleNamespace(
             total_officers=lambda: 10,
-            allocations=allocations,
-            reserve_officers=reserve_officers,
+            allocated=allocations,
+            idle_officers=reserve_officers,
         ),
         day=5, max_days=30, total_backlog=50, total_completed=20,
         total_sla_breaches=3, fairness_gap=0.1,
@@ -115,3 +115,11 @@ def test_mask_length(amc):
 
 def test_at_least_one_valid_action(amc):
     assert amc.compute(_make_obs(), "balanced").any()
+
+
+def test_only_advance_time_when_backlog_zero(amc):
+    obs = _make_obs(active_cases_by_service={svc.value: 0 for svc in ServiceType})
+    obs.total_backlog = 0
+    mask = amc.compute(obs, "balanced")
+    assert mask[18]
+    assert int(mask.sum()) == 1

@@ -41,6 +41,7 @@ def compute_reward(
     idle_capacity: int,
     newly_unblocked_docs: int = 0,
     oscillation_detected: bool = False,
+    award_stability_bonus: bool = True,
 ) -> RewardModel:
     """
     Compute one-step dense reward.
@@ -64,7 +65,11 @@ def compute_reward(
     progress_reward   = COEFF_PROGRESS   * stage_advances
     completion_reward = COEFF_COMPLETION * completions
     recovery_reward   = COEFF_RECOVERY   * newly_unblocked_docs
-    stability_bonus   = COEFF_STABILITY  if (new_sla_breaches == 0 and not invalid_action) else 0.0
+    stability_bonus = (
+        COEFF_STABILITY
+        if (award_stability_bonus and new_sla_breaches == 0 and not invalid_action)
+        else 0.0
+    )
 
     # ── Negative components ───────────────────────────────────────
     waiting_penalty = COEFF_WAITING * active_backlog

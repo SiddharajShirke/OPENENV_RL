@@ -16,8 +16,13 @@ training:
   total_timesteps: 200000
   n_envs: 4
   seed: 42
-  eval_freq: 2048
-  n_eval_episodes: 5
+  eval_freq: 16384
+  n_eval_episodes: 2
+  grader_eval_freq_multiplier: 4
+  enable_eval_callback: true
+  progress_bar: false
+  model_verbose: 0
+  callback_verbose: 0
 
 target_scores:
   district_backlog_easy: 0.80

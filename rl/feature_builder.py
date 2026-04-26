@@ -87,7 +87,10 @@ class FeatureBuilder:
         features = np.zeros(OBS_DIM, dtype=np.float32)
         offset = 0
 
-        snap_dict = {snap.service: snap for snap in obs.queue_snapshots}
+        snap_dict = {
+            snap.service_type: snap 
+            for snap in (obs.queue_snapshots.values() if isinstance(obs.queue_snapshots, dict) else obs.queue_snapshots)
+        }
 
         # ── Per-service block ─────────────────────────────────────────────
         for svc in SERVICES:
@@ -96,15 +99,15 @@ class FeatureBuilder:
                 offset += PER_SERVICE_DIM
                 continue
 
-            total_in_svc = max(snap.active_cases, 1) # instead of queue_length
+            total_in_svc = max(getattr(snap, "total_pending", getattr(snap, "active_cases", 0)), 1)
 
-            features[offset + 0] = snap.active_cases / _MAX_QUEUE
-            features[offset + 1] = snap.avg_age_days / _MAX_WAIT  # avg_age_days instead of avg_wait_days
-            features[offset + 2] = snap.urgent_cases / _MAX_URGENT  # urgent_cases
-            features[offset + 3] = snap.missing_docs_cases / _MAX_MISSING  # missing_docs_cases
+            features[offset + 0] = getattr(snap, "total_pending", getattr(snap, "active_cases", 0)) / _MAX_QUEUE
+            features[offset + 1] = getattr(snap, "avg_age_days", getattr(snap, "avg_waiting_days", getattr(snap, "oldest_case_age_days", 0))) / _MAX_WAIT
+            features[offset + 2] = getattr(snap, "urgent_cases", getattr(snap, "urgent_pending", 0)) / _MAX_URGENT
+            features[offset + 3] = getattr(snap, "blocked_missing_docs", getattr(snap, "missing_docs_cases", 0)) / _MAX_MISSING
 
             # Stage distribution as fractions
-            stage_counts = snap.stage_counts or {}
+            stage_counts = getattr(snap, "stage_counts", getattr(snap, "public_stage_counts", {})) or {}
             for stg in STAGES:
                 count = stage_counts.get(stg, 0)
                 features[offset + 4 + STAGE_IDX[stg]] = count / total_in_svc
@@ -117,7 +120,7 @@ class FeatureBuilder:
         features[offset + 1]  = obs.total_backlog    / _MAX_BACKLOG
         features[offset + 2]  = obs.total_completed  / _MAX_COMPLETED
         features[offset + 3]  = obs.total_sla_breaches / _MAX_SLA
-        features[offset + 4]  = float(obs.fairness_gap)
+        features[offset + 4]  = float(getattr(obs, "fairness_gap", getattr(obs, "fairness_index", 0.0)) or 0.0)
         features[offset + 5]  = obs.escalation_budget_remaining / _MAX_ESC_BUDGET
         features[offset + 6]  = float(obs.last_action_valid)
         offset += 7
@@ -142,16 +145,17 @@ class FeatureBuilder:
 
         # Officer-derived scalars
         pool = obs.officer_pool
-        total_officers = max(pool.total_officers(), 1)
-        idle_ratio         = pool.reserve_officers / total_officers
+        total_officers = max(getattr(pool, "total_officers", 1) if not callable(getattr(pool, "total_officers", None)) else pool.total_officers(), 1)
+        idle_officers = getattr(pool, "idle_officers", getattr(pool, "reserve_officers", 0))
+        idle_ratio         = idle_officers / total_officers
         total_backlog_safe = max(obs.total_backlog, 1)
         urgent_total       = sum(
-            snap_dict[s].urgent_cases
+            getattr(snap_dict[s], "urgent_cases", getattr(snap_dict[s], "urgent_pending", 0))
             for s in SERVICES
             if s in snap_dict
         )
         urgent_ratio       = urgent_total / total_backlog_safe
-        utilization        = (total_officers - pool.reserve_officers) / total_officers
+        utilization        = (total_officers - idle_officers) / total_officers
         backlog_per_off    = obs.total_backlog / total_officers
 
         features[offset + 0] = float(np.clip(idle_ratio,      0.0, 1.0))

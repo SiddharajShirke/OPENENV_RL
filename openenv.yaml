@@ -16,7 +16,7 @@ entrypoint:
   inference_script: inference.py
 
 environment:
-  class: app.env.GovWorkflowEnv
+  class: server.gov_environment.GovWorkflowOpenEnv
   observation_model: app.models.ObservationModel
   action_model: app.models.ActionModel
   reward_model: app.models.RewardModel
@@ -24,21 +24,21 @@ environment:
   step_info_model: app.models.StepInfoModel
 
 tasks:
-  - task_id: district_backlog_easy
+  - id: district_backlog_easy
     seed: 11
     description: >
       Small district office with 3 services and generous SLA windows.
       Tests baseline queue control and document handling.
     grader: app.graders.grade_easy
 
-  - task_id: mixed_urgency_medium
+  - id: mixed_urgency_medium
     seed: 22
     description: >
       Mid-sized office with mixed urgency and tighter fairness requirements.
       Tests urgency prioritization and staffing trade-offs.
     grader: app.graders.grade_medium
 
-  - task_id: cross_department_hard
+  - id: cross_department_hard
     seed: 33
     description: >
       Large cross-department office with high arrivals and strict fairness.

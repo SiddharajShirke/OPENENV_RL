@@ -24,27 +24,47 @@ class ActionMaskComputer:
         current_priority_mode: str = "balanced",
     ) -> np.ndarray:
         mask = np.ones(N_ACTIONS, dtype=bool)
+        total_backlog = int(getattr(obs, "total_backlog", 0) or 0)
 
-        snapshots = {snap.service.value: snap for snap in obs.queue_snapshots}
+        # Prevent reward farming with no-op control actions when nothing is queued.
+        # In this state, time must advance to generate arrivals and meaningful decisions.
+        if total_backlog <= 0:
+            mask[:] = False
+            for action_idx, (action_type, _service, _pm, _delta) in ACTION_DECODE_TABLE.items():
+                if action_type == "advance_time":
+                    mask[action_idx] = True
+                    break
+            return mask
+
+        queue_snaps = obs.queue_snapshots.values() if isinstance(obs.queue_snapshots, dict) else obs.queue_snapshots
+        queue_snaps = list(queue_snaps)
+        snapshots = {
+            (snap.service_type.value if hasattr(snap.service_type, "value") else snap.service_type): snap 
+            for snap in queue_snaps
+        }
         active_services = {
             service for service, snap in snapshots.items()
-            if snap.active_cases > 0
+            if getattr(snap, "total_pending", getattr(snap, "active_cases", 0)) > 0
         }
         escalation_budget = obs.escalation_budget_remaining
 
         services_with_missing_docs = {
-            snap.service.value for snap in obs.queue_snapshots
-            if snap.missing_docs_cases > 0
+            (snap.service_type.value if hasattr(snap.service_type, "value") else snap.service_type) 
+            for snap in queue_snaps
+            if getattr(snap, "blocked_missing_docs", getattr(snap, "missing_docs_cases", 0)) > 0
         }
         services_with_escalatable = {
-            snap.service.value for snap in obs.queue_snapshots
-            if (snap.active_cases - snap.escalated_cases) > 0
+            (snap.service_type.value if hasattr(snap.service_type, "value") else snap.service_type)
+            for snap in queue_snaps
+            if (getattr(snap, "total_pending", getattr(snap, "active_cases", 0)) - getattr(snap, "urgent_pending", getattr(snap, "escalated_cases", 0))) > 0
         }
 
         allocations = {}
-        for service_key, value in (obs.officer_pool.allocations or {}).items():
+        for service_key, value in (getattr(obs.officer_pool, "allocated", getattr(obs.officer_pool, "allocations", {})) or {}).items():
             name = service_key.value if hasattr(service_key, "value") else str(service_key)
             allocations[name] = int(value)
+
+        idle_officers = getattr(obs.officer_pool, "idle_officers", getattr(obs.officer_pool, "reserve_officers", 0))
 
         for action_idx, (action_type, service, priority_mode, delta) in ACTION_DECODE_TABLE.items():
 
@@ -70,13 +90,13 @@ class ActionMaskComputer:
                 mask[action_idx] = has_source and has_target
 
             elif action_type == "assign_capacity":
-                if obs.officer_pool.reserve_officers <= 0:
+                if idle_officers <= 0:
                     mask[action_idx] = False
                 elif service == "__most_loaded__":
                     mask[action_idx] = len(active_services) > 0
                 elif service == "__most_urgent__":
                     mask[action_idx] = any(
-                        snap.urgent_cases > 0 for snap in obs.queue_snapshots
+                        getattr(snap, "urgent_cases", getattr(snap, "urgent_pending", 0)) > 0 for snap in queue_snaps
                     )
                 else:
                     mask[action_idx] = False

@@ -420,6 +420,10 @@ def _repair_action_for_observation(
 
     return action, None
 
+The high-level simulation orchestration now lives in app.engine.
+This module re-exports the public runtime API so existing imports
+from app.simulator continue to work unchanged.
+"""
 
 def _model_label_for_mode(agent_mode: SimulationAgentMode) -> str:
     if agent_mode == "baseline_policy":
@@ -1082,20 +1086,20 @@ def _decode_action_idx(action_idx: int) -> tuple[ActionModel, str]:
     if row is None:
         return ActionModel(action_type=ActionType.ADVANCE_TIME), f"action_{action_idx}"
 
-    action_type, service, priority_mode, delta = row
-    kwargs: dict[str, Any] = {"action_type": action_type}
-    if service is not None:
-        kwargs["service"] = service
-    if priority_mode is not None:
-        kwargs["priority_mode"] = priority_mode
-    if delta is not None:
-        kwargs["officer_delta"] = int(delta)
-    try:
-        if isinstance(kwargs.get("service"), str):
-            kwargs["service"] = ServiceType(kwargs["service"])
-        if isinstance(kwargs.get("priority_mode"), str):
-            kwargs["priority_mode"] = PriorityMode(kwargs["priority_mode"])
-        action = ActionModel(**kwargs)
-    except Exception:
-        action = ActionModel(action_type=ActionType.ADVANCE_TIME)
-    return action, action_type
+from app.engine import (
+    DayResult,
+    DaySimulator,
+    LiveSimulationSession,
+    SimulationAgentMode,
+    SimulationRun,
+    run_simulation,
+)
+
+__all__ = [
+    "DayResult",
+    "DaySimulator",
+    "SimulationAgentMode",
+    "SimulationRun",
+    "LiveSimulationSession",
+    "run_simulation",
+]

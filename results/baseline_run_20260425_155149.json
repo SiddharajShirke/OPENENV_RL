@@ -1,0 +1,3224 @@
+{
+  "run_timestamp": "2026-04-25T15:51:49.825151",
+  "total_episodes": 4,
+  "average_score": 0.509,
+  "model_pool": [
+    "meta/llama-3.3-70b-instruct",
+    "deepseek-ai/deepseek-v4-flash",
+    "deepseek-ai/deepseek-r1",
+    "nvidia/nemotron-3-super-120b-a12b",
+    "qwen/qwen3.5-122b-a10b",
+    "deepseek-ai/deepseek-v3",
+    "minimaxai/minimax-m2.7",
+    "google/gemma-4-31b-it",
+    "microsoft/phi-4-mini-instruct",
+    "meta/llama-3.1-8b-instruct"
+  ],
+  "free_pool": [
+    "deepseek-ai/deepseek-v4-flash",
+    "minimaxai/minimax-m2.7",
+    "microsoft/phi-4-mini-instruct",
+    "meta/llama-3.1-8b-instruct"
+  ],
+  "episodes": [
+    {
+      "task_id": "district_backlog_easy",
+      "agent": "heuristic",
+      "primary_model": "heuristic",
+      "seed": 11,
+      "score": 0.5273611111111112,
+      "grader_name": "easy",
+      "total_steps": 45,
+      "total_reward": -79.86,
+      "total_completed": 41,
+      "total_sla_breaches": 76,
+      "total_invalid_actions": 0,
+      "final_day": 30,
+      "terminated": false,
+      "truncated": true,
+      "grader_metrics": {
+        "completion_rate": 0.1139,
+        "sla_compliance_rate": 0.7889,
+        "idle_efficiency": 1.0,
+        "document_rework_quality": 0.9091,
+        "urgent_served_rate": 0.7059,
+        "fairness_score": 1.0,
+        "escalation_discipline": 1.0,
+        "fairness_gap": 0.0,
+        "total_cases_arrived": 360,
+        "total_completed": 41,
+        "total_sla_breached": 76,
+        "total_rejected": 0,
+        "avg_waiting_days": 7.56
+      },
+      "step_log": [
+        {
+          "step": 1,
+          "day": 0,
+          "action_type": "set_priority_mode",
+          "reward": 0.1,
+          "invalid": false,
+          "total_backlog": 0,
+          "total_completed": 0,
+          "model_used": "heuristic",
+          "notes": [
+            "Priority mode changed: balanced -> urgent_first"
+          ]
+        },
+        {
+          "step": 2,
+          "day": 1,
+          "action_type": "advance_time",
+          "reward": 5.22,
+          "invalid": false,
+          "total_backlog": 12,
+          "total_completed": 0,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 1 simulated"
+          ]
+        },
+        {
+          "step": 3,
+          "day": 1,
+          "action_type": "request_missing_documents",
+          "reward": -0.38,
+          "invalid": false,
+          "total_backlog": 12,
+          "total_completed": 0,
+          "model_used": "heuristic",
+          "notes": [
+            "Sent missing-doc requests for 3 case(s) in income_certificate"
+          ]
+        },
+        {
+          "step": 4,
+          "day": 2,
+          "action_type": "advance_time",
+          "reward": 4.74,
+          "invalid": false,
+          "total_backlog": 24,
+          "total_completed": 0,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 2 simulated"
+          ]
+        },
+        {
+          "step": 5,
+          "day": 3,
+          "action_type": "advance_time",
+          "reward": 4.26,
+          "invalid": false,
+          "total_backlog": 36,
+          "total_completed": 0,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 3 simulated"
+          ]
+        },
+        {
+          "step": 6,
+          "day": 3,
+          "action_type": "request_missing_documents",
+          "reward": -1.34,
+          "invalid": false,
+          "total_backlog": 36,
+          "total_completed": 0,
+          "model_used": "heuristic",
+          "notes": [
+            "Sent missing-doc requests for 3 case(s) in income_certificate"
+          ]
+        },
+        {
+          "step": 7,
+          "day": 4,
+          "action_type": "advance_time",
+          "reward": 11.86,
+          "invalid": false,
+          "total_backlog": 46,
+          "total_completed": 2,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 4 simulated"
+          ]
+        },
+        {
+          "step": 8,
+          "day": 5,
+          "action_type": "advance_time",
+          "reward": 11.46,
+          "invalid": false,
+          "total_backlog": 56,
+          "total_completed": 4,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 5 simulated"
+          ]
+        },
+        {
+          "step": 9,
+          "day": 5,
+          "action_type": "request_missing_documents",
+          "reward": -2.14,
+          "invalid": false,
+          "total_backlog": 56,
+          "total_completed": 4,
+          "model_used": "heuristic",
+          "notes": [
+            "Sent missing-doc requests for 3 case(s) in income_certificate"
+          ]
+        },
+        {
+          "step": 10,
+          "day": 6,
+          "action_type": "advance_time",
+          "reward": 7.02,
+          "invalid": false,
+          "total_backlog": 67,
+          "total_completed": 5,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 6 simulated"
+          ]
+        },
+        {
+          "step": 11,
+          "day": 7,
+          "action_type": "advance_time",
+          "reward": 14.66,
+          "invalid": false,
+          "total_backlog": 76,
+          "total_completed": 8,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 7 simulated"
+          ]
+        },
+        {
+          "step": 12,
+          "day": 8,
+          "action_type": "advance_time",
+          "reward": 6.22,
+          "invalid": false,
+          "total_backlog": 87,
+          "total_completed": 9,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 8 simulated"
+          ]
+        },
+        {
+          "step": 13,
+          "day": 8,
+          "action_type": "request_missing_documents",
+          "reward": -3.38,
+          "invalid": false,
+          "total_backlog": 87,
+          "total_completed": 9,
+          "model_used": "heuristic",
+          "notes": [
+            "Sent missing-doc requests for 3 case(s) in income_certificate"
+          ]
+        },
+        {
+          "step": 14,
+          "day": 9,
+          "action_type": "advance_time",
+          "reward": 1.74,
+          "invalid": false,
+          "total_backlog": 99,
+          "total_completed": 9,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 9 simulated"
+          ]
+        },
+        {
+          "step": 15,
+          "day": 10,
+          "action_type": "advance_time",
+          "reward": 5.3,
+          "invalid": false,
+          "total_backlog": 110,
+          "total_completed": 10,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 10 simulated"
+          ]
+        },
+        {
+          "step": 16,
+          "day": 11,
+          "action_type": "advance_time",
+          "reward": 12.94,
+          "invalid": false,
+          "total_backlog": 119,
+          "total_completed": 13,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 11 simulated"
+          ]
+        },
+        {
+          "step": 17,
+          "day": 11,
+          "action_type": "request_missing_documents",
+          "reward": -4.66,
+          "invalid": false,
+          "total_backlog": 119,
+          "total_completed": 13,
+          "model_used": "heuristic",
+          "notes": [
+            "Sent missing-doc requests for 3 case(s) in income_certificate"
+          ]
+        },
+        {
+          "step": 18,
+          "day": 12,
+          "action_type": "advance_time",
+          "reward": 0.46,
+          "invalid": false,
+          "total_backlog": 131,
+          "total_completed": 13,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 12 simulated"
+          ]
+        },
+        {
+          "step": 19,
+          "day": 13,
+          "action_type": "advance_time",
+          "reward": 4.02,
+          "invalid": false,
+          "total_backlog": 142,
+          "total_completed": 14,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 13 simulated"
+          ]
+        },
+        {
+          "step": 20,
+          "day": 14,
+          "action_type": "advance_time",
+          "reward": 7.62,
+          "invalid": false,
+          "total_backlog": 152,
+          "total_completed": 16,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 14 simulated"
+          ]
+        },
+        {
+          "step": 21,
+          "day": 14,
+          "action_type": "request_missing_documents",
+          "reward": -5.98,
+          "invalid": false,
+          "total_backlog": 152,
+          "total_completed": 16,
+          "model_used": "heuristic",
+          "notes": [
+            "Sent missing-doc requests for 3 case(s) in income_certificate"
+          ]
+        },
+        {
+          "step": 22,
+          "day": 15,
+          "action_type": "advance_time",
+          "reward": 11.26,
+          "invalid": false,
+          "total_backlog": 161,
+          "total_completed": 19,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 15 simulated"
+          ]
+        },
+        {
+          "step": 23,
+          "day": 16,
+          "action_type": "advance_time",
+          "reward": 6.86,
+          "invalid": false,
+          "total_backlog": 171,
+          "total_completed": 21,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 16 simulated"
+          ]
+        },
+        {
+          "step": 24,
+          "day": 17,
+          "action_type": "advance_time",
+          "reward": -1.62,
+          "invalid": false,
+          "total_backlog": 183,
+          "total_completed": 21,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 17 simulated"
+          ]
+        },
+        {
+          "step": 25,
+          "day": 17,
+          "action_type": "request_missing_documents",
+          "reward": -7.22,
+          "invalid": false,
+          "total_backlog": 183,
+          "total_completed": 21,
+          "model_used": "heuristic",
+          "notes": [
+            "Sent missing-doc requests for 3 case(s) in income_certificate"
+          ]
+        },
+        {
+          "step": 26,
+          "day": 18,
+          "action_type": "advance_time",
+          "reward": 1.94,
+          "invalid": false,
+          "total_backlog": 194,
+          "total_completed": 22,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 18 simulated"
+          ]
+        },
+        {
+          "step": 27,
+          "day": 19,
+          "action_type": "advance_time",
+          "reward": 9.58,
+          "invalid": false,
+          "total_backlog": 203,
+          "total_completed": 25,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 19 simulated"
+          ]
+        },
+        {
+          "step": 28,
+          "day": 20,
+          "action_type": "advance_time",
+          "reward": -2.9,
+          "invalid": false,
+          "total_backlog": 215,
+          "total_completed": 25,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 20 simulated"
+          ]
+        },
+        {
+          "step": 29,
+          "day": 20,
+          "action_type": "request_missing_documents",
+          "reward": -8.5,
+          "invalid": false,
+          "total_backlog": 215,
+          "total_completed": 25,
+          "model_used": "heuristic",
+          "notes": [
+            "Sent missing-doc requests for 3 case(s) in income_certificate"
+          ]
+        },
+        {
+          "step": 30,
+          "day": 21,
+          "action_type": "advance_time",
+          "reward": 4.7,
+          "invalid": false,
+          "total_backlog": 225,
+          "total_completed": 27,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 21 simulated"
+          ]
+        },
+        {
+          "step": 31,
+          "day": 22,
+          "action_type": "advance_time",
+          "reward": 0.26,
+          "invalid": false,
+          "total_backlog": 236,
+          "total_completed": 28,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 22 simulated"
+          ]
+        },
+        {
+          "step": 32,
+          "day": 23,
+          "action_type": "advance_time",
+          "reward": -1.2,
+          "invalid": false,
+          "total_backlog": 245,
+          "total_completed": 31,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 23 simulated"
+          ]
+        },
+        {
+          "step": 33,
+          "day": 23,
+          "action_type": "request_missing_documents",
+          "reward": -9.7,
+          "invalid": false,
+          "total_backlog": 245,
+          "total_completed": 31,
+          "model_used": "heuristic",
+          "notes": [
+            "Sent missing-doc requests for 3 case(s) in income_certificate"
+          ]
+        },
+        {
+          "step": 34,
+          "day": 24,
+          "action_type": "advance_time",
+          "reward": -5.6,
+          "invalid": false,
+          "total_backlog": 255,
+          "total_completed": 33,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 24 simulated"
+          ]
+        },
+        {
+          "step": 35,
+          "day": 25,
+          "action_type": "advance_time",
+          "reward": -13.04,
+          "invalid": false,
+          "total_backlog": 266,
+          "total_completed": 34,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 25 simulated"
+          ]
+        },
+        {
+          "step": 36,
+          "day": 25,
+          "action_type": "escalate_service",
+          "reward": -10.54,
+          "invalid": false,
+          "total_backlog": 266,
+          "total_completed": 34,
+          "model_used": "heuristic",
+          "notes": [
+            "Escalated case case-000002 (income_certificate)"
+          ]
+        },
+        {
+          "step": 37,
+          "day": 26,
+          "action_type": "advance_time",
+          "reward": -20.52,
+          "invalid": false,
+          "total_backlog": 278,
+          "total_completed": 34,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 26 simulated"
+          ]
+        },
+        {
+          "step": 38,
+          "day": 26,
+          "action_type": "request_missing_documents",
+          "reward": -11.02,
+          "invalid": false,
+          "total_backlog": 278,
+          "total_completed": 34,
+          "model_used": "heuristic",
+          "notes": [
+            "Sent missing-doc requests for 3 case(s) in income_certificate"
+          ]
+        },
+        {
+          "step": 39,
+          "day": 27,
+          "action_type": "advance_time",
+          "reward": -6.34,
+          "invalid": false,
+          "total_backlog": 286,
+          "total_completed": 38,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 27 simulated"
+          ]
+        },
+        {
+          "step": 40,
+          "day": 27,
+          "action_type": "escalate_service",
+          "reward": -11.34,
+          "invalid": false,
+          "total_backlog": 286,
+          "total_completed": 38,
+          "model_used": "heuristic",
+          "notes": [
+            "Escalated case case-000003 (income_certificate)"
+          ]
+        },
+        {
+          "step": 41,
+          "day": 28,
+          "action_type": "advance_time",
+          "reward": -20.28,
+          "invalid": false,
+          "total_backlog": 297,
+          "total_completed": 39,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 28 simulated"
+          ]
+        },
+        {
+          "step": 42,
+          "day": 28,
+          "action_type": "escalate_service",
+          "reward": -11.78,
+          "invalid": false,
+          "total_backlog": 297,
+          "total_completed": 39,
+          "model_used": "heuristic",
+          "notes": [
+            "Escalated case case-000004 (income_certificate)"
+          ]
+        },
+        {
+          "step": 43,
+          "day": 29,
+          "action_type": "advance_time",
+          "reward": -20.72,
+          "invalid": false,
+          "total_backlog": 308,
+          "total_completed": 40,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 29 simulated"
+          ]
+        },
+        {
+          "step": 44,
+          "day": 29,
+          "action_type": "request_missing_documents",
+          "reward": -12.22,
+          "invalid": false,
+          "total_backlog": 308,
+          "total_completed": 40,
+          "model_used": "heuristic",
+          "notes": [
+            "Sent missing-doc requests for 3 case(s) in income_certificate"
+          ]
+        },
+        {
+          "step": 45,
+          "day": 30,
+          "action_type": "advance_time",
+          "reward": -19.66,
+          "invalid": false,
+          "total_backlog": 319,
+          "total_completed": 41,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 30 simulated"
+          ]
+        }
+      ],
+      "elapsed_seconds": 0.03,
+      "model_rotations": [],
+      "timestamp": "2026-04-25T15:51:49.537553"
+    },
+    {
+      "task_id": "mixed_urgency_medium",
+      "agent": "heuristic",
+      "primary_model": "heuristic",
+      "seed": 22,
+      "score": 0.45353439153439157,
+      "grader_name": "medium",
+      "total_steps": 65,
+      "total_reward": -684.2152,
+      "total_completed": 58,
+      "total_sla_breaches": 259,
+      "total_invalid_actions": 0,
+      "final_day": 45,
+      "terminated": false,
+      "truncated": true,
+      "grader_metrics": {
+        "completion_rate": 0.0859,
+        "sla_compliance_rate": 0.6163,
+        "idle_efficiency": 1.0,
+        "document_rework_quality": 1.0,
+        "urgent_served_rate": 0.2571,
+        "fairness_score": 0.9778,
+        "escalation_discipline": 1.0,
+        "fairness_gap": 0.0222,
+        "total_cases_arrived": 675,
+        "total_completed": 58,
+        "total_sla_breached": 259,
+        "total_rejected": 0,
+        "avg_waiting_days": 15.33
+      },
+      "step_log": [
+        {
+          "step": 1,
+          "day": 0,
+          "action_type": "set_priority_mode",
+          "reward": 0.1,
+          "invalid": false,
+          "total_backlog": 0,
+          "total_completed": 0,
+          "model_used": "heuristic",
+          "notes": [
+            "Priority mode changed: balanced -> urgent_first"
+          ]
+        },
+        {
+          "step": 2,
+          "day": 1,
+          "action_type": "advance_time",
+          "reward": 5.8,
+          "invalid": false,
+          "total_backlog": 15,
+          "total_completed": 0,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 1 simulated"
+          ]
+        },
+        {
+          "step": 3,
+          "day": 1,
+          "action_type": "request_missing_documents",
+          "reward": -0.5,
+          "invalid": false,
+          "total_backlog": 15,
+          "total_completed": 0,
+          "model_used": "heuristic",
+          "notes": [
+            "Sent missing-doc requests for 2 case(s) in income_certificate"
+          ]
+        },
+        {
+          "step": 4,
+          "day": 2,
+          "action_type": "advance_time",
+          "reward": 5.9,
+          "invalid": false,
+          "total_backlog": 30,
+          "total_completed": 0,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 2 simulated"
+          ]
+        },
+        {
+          "step": 5,
+          "day": 3,
+          "action_type": "advance_time",
+          "reward": 5.3,
+          "invalid": false,
+          "total_backlog": 45,
+          "total_completed": 0,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 3 simulated"
+          ]
+        },
+        {
+          "step": 6,
+          "day": 4,
+          "action_type": "advance_time",
+          "reward": 28.94,
+          "invalid": false,
+          "total_backlog": 54,
+          "total_completed": 6,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 4 simulated"
+          ]
+        },
+        {
+          "step": 7,
+          "day": 4,
+          "action_type": "request_missing_documents",
+          "reward": -2.06,
+          "invalid": false,
+          "total_backlog": 54,
+          "total_completed": 6,
+          "model_used": "heuristic",
+          "notes": [
+            "Sent missing-doc requests for 3 case(s) in income_certificate"
+          ]
+        },
+        {
+          "step": 8,
+          "day": 5,
+          "action_type": "advance_time",
+          "reward": 8.34,
+          "invalid": false,
+          "total_backlog": 68,
+          "total_completed": 7,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 5 simulated"
+          ]
+        },
+        {
+          "step": 9,
+          "day": 6,
+          "action_type": "advance_time",
+          "reward": 3.7467,
+          "invalid": false,
+          "total_backlog": 83,
+          "total_completed": 7,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 6 simulated"
+          ]
+        },
+        {
+          "step": 10,
+          "day": 7,
+          "action_type": "advance_time",
+          "reward": 11.26,
+          "invalid": false,
+          "total_backlog": 96,
+          "total_completed": 9,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 7 simulated"
+          ]
+        },
+        {
+          "step": 11,
+          "day": 7,
+          "action_type": "request_missing_documents",
+          "reward": -3.74,
+          "invalid": false,
+          "total_backlog": 96,
+          "total_completed": 9,
+          "model_used": "heuristic",
+          "notes": [
+            "Sent missing-doc requests for 3 case(s) in income_certificate"
+          ]
+        },
+        {
+          "step": 12,
+          "day": 8,
+          "action_type": "advance_time",
+          "reward": 10.69,
+          "invalid": false,
+          "total_backlog": 109,
+          "total_completed": 11,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 8 simulated"
+          ]
+        },
+        {
+          "step": 13,
+          "day": 9,
+          "action_type": "advance_time",
+          "reward": 6.18,
+          "invalid": false,
+          "total_backlog": 123,
+          "total_completed": 12,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 9 simulated"
+          ]
+        },
+        {
+          "step": 14,
+          "day": 10,
+          "action_type": "advance_time",
+          "reward": 5.6,
+          "invalid": false,
+          "total_backlog": 137,
+          "total_completed": 13,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 10 simulated"
+          ]
+        },
+        {
+          "step": 15,
+          "day": 10,
+          "action_type": "request_missing_documents",
+          "reward": -5.4,
+          "invalid": false,
+          "total_backlog": 137,
+          "total_completed": 13,
+          "model_used": "heuristic",
+          "notes": [
+            "Sent missing-doc requests for 3 case(s) in income_certificate"
+          ]
+        },
+        {
+          "step": 16,
+          "day": 11,
+          "action_type": "advance_time",
+          "reward": 1.0018,
+          "invalid": false,
+          "total_backlog": 152,
+          "total_completed": 13,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 11 simulated"
+          ]
+        },
+        {
+          "step": 17,
+          "day": 12,
+          "action_type": "advance_time",
+          "reward": 4.4267,
+          "invalid": false,
+          "total_backlog": 166,
+          "total_completed": 14,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 12 simulated"
+          ]
+        },
+        {
+          "step": 18,
+          "day": 13,
+          "action_type": "advance_time",
+          "reward": 3.9,
+          "invalid": false,
+          "total_backlog": 180,
+          "total_completed": 15,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 13 simulated"
+          ]
+        },
+        {
+          "step": 19,
+          "day": 13,
+          "action_type": "request_missing_documents",
+          "reward": -7.1,
+          "invalid": false,
+          "total_backlog": 180,
+          "total_completed": 15,
+          "model_used": "heuristic",
+          "notes": [
+            "Sent missing-doc requests for 3 case(s) in income_certificate"
+          ]
+        },
+        {
+          "step": 20,
+          "day": 14,
+          "action_type": "advance_time",
+          "reward": 3.3257,
+          "invalid": false,
+          "total_backlog": 194,
+          "total_completed": 16,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 14 simulated"
+          ]
+        },
+        {
+          "step": 21,
+          "day": 15,
+          "action_type": "advance_time",
+          "reward": 2.7533,
+          "invalid": false,
+          "total_backlog": 208,
+          "total_completed": 17,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 15 simulated"
+          ]
+        },
+        {
+          "step": 22,
+          "day": 16,
+          "action_type": "advance_time",
+          "reward": 6.21,
+          "invalid": false,
+          "total_backlog": 221,
+          "total_completed": 19,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 16 simulated"
+          ]
+        },
+        {
+          "step": 23,
+          "day": 16,
+          "action_type": "request_missing_documents",
+          "reward": -8.79,
+          "invalid": false,
+          "total_backlog": 221,
+          "total_completed": 19,
+          "model_used": "heuristic",
+          "notes": [
+            "Sent missing-doc requests for 3 case(s) in income_certificate"
+          ]
+        },
+        {
+          "step": 24,
+          "day": 17,
+          "action_type": "advance_time",
+          "reward": 1.6765,
+          "invalid": false,
+          "total_backlog": 235,
+          "total_completed": 20,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 17 simulated"
+          ]
+        },
+        {
+          "step": 25,
+          "day": 18,
+          "action_type": "advance_time",
+          "reward": -2.9222,
+          "invalid": false,
+          "total_backlog": 250,
+          "total_completed": 20,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 18 simulated"
+          ]
+        },
+        {
+          "step": 26,
+          "day": 19,
+          "action_type": "advance_time",
+          "reward": 4.5379,
+          "invalid": false,
+          "total_backlog": 263,
+          "total_completed": 22,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 19 simulated"
+          ]
+        },
+        {
+          "step": 27,
+          "day": 19,
+          "action_type": "request_missing_documents",
+          "reward": -10.4621,
+          "invalid": false,
+          "total_backlog": 263,
+          "total_completed": 22,
+          "model_used": "heuristic",
+          "notes": [
+            "Sent missing-doc requests for 3 case(s) in income_certificate"
+          ]
+        },
+        {
+          "step": 28,
+          "day": 20,
+          "action_type": "advance_time",
+          "reward": 4.03,
+          "invalid": false,
+          "total_backlog": 276,
+          "total_completed": 24,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 20 simulated"
+          ]
+        },
+        {
+          "step": 29,
+          "day": 21,
+          "action_type": "advance_time",
+          "reward": -0.5381,
+          "invalid": false,
+          "total_backlog": 290,
+          "total_completed": 25,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 21 simulated"
+          ]
+        },
+        {
+          "step": 30,
+          "day": 22,
+          "action_type": "advance_time",
+          "reward": -1.1055,
+          "invalid": false,
+          "total_backlog": 304,
+          "total_completed": 26,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 22 simulated"
+          ]
+        },
+        {
+          "step": 31,
+          "day": 22,
+          "action_type": "request_missing_documents",
+          "reward": -12.1055,
+          "invalid": false,
+          "total_backlog": 304,
+          "total_completed": 26,
+          "model_used": "heuristic",
+          "notes": [
+            "Sent missing-doc requests for 3 case(s) in income_certificate"
+          ]
+        },
+        {
+          "step": 32,
+          "day": 23,
+          "action_type": "advance_time",
+          "reward": -2.2409,
+          "invalid": false,
+          "total_backlog": 317,
+          "total_completed": 28,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 23 simulated"
+          ]
+        },
+        {
+          "step": 33,
+          "day": 24,
+          "action_type": "advance_time",
+          "reward": -15.8067,
+          "invalid": false,
+          "total_backlog": 331,
+          "total_completed": 29,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 24 simulated"
+          ]
+        },
+        {
+          "step": 34,
+          "day": 25,
+          "action_type": "advance_time",
+          "reward": -14.404,
+          "invalid": false,
+          "total_backlog": 346,
+          "total_completed": 29,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 25 simulated"
+          ]
+        },
+        {
+          "step": 35,
+          "day": 25,
+          "action_type": "request_missing_documents",
+          "reward": -13.804,
+          "invalid": false,
+          "total_backlog": 346,
+          "total_completed": 29,
+          "model_used": "heuristic",
+          "notes": [
+            "Sent missing-doc requests for 3 case(s) in income_certificate"
+          ]
+        },
+        {
+          "step": 36,
+          "day": 26,
+          "action_type": "advance_time",
+          "reward": -11.4369,
+          "invalid": false,
+          "total_backlog": 359,
+          "total_completed": 31,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 26 simulated"
+          ]
+        },
+        {
+          "step": 37,
+          "day": 27,
+          "action_type": "advance_time",
+          "reward": -14.4793,
+          "invalid": false,
+          "total_backlog": 373,
+          "total_completed": 32,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 27 simulated"
+          ]
+        },
+        {
+          "step": 38,
+          "day": 28,
+          "action_type": "advance_time",
+          "reward": -11.0114,
+          "invalid": false,
+          "total_backlog": 386,
+          "total_completed": 34,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 28 simulated"
+          ]
+        },
+        {
+          "step": 39,
+          "day": 28,
+          "action_type": "request_missing_documents",
+          "reward": -15.4114,
+          "invalid": false,
+          "total_backlog": 386,
+          "total_completed": 34,
+          "model_used": "heuristic",
+          "notes": [
+            "Sent missing-doc requests for 3 case(s) in income_certificate"
+          ]
+        },
+        {
+          "step": 40,
+          "day": 29,
+          "action_type": "advance_time",
+          "reward": -14.5014,
+          "invalid": false,
+          "total_backlog": 399,
+          "total_completed": 36,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 29 simulated"
+          ]
+        },
+        {
+          "step": 41,
+          "day": 30,
+          "action_type": "advance_time",
+          "reward": -24.6,
+          "invalid": false,
+          "total_backlog": 414,
+          "total_completed": 36,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 30 simulated"
+          ]
+        },
+        {
+          "step": 42,
+          "day": 31,
+          "action_type": "advance_time",
+          "reward": -25.1987,
+          "invalid": false,
+          "total_backlog": 429,
+          "total_completed": 36,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 31 simulated"
+          ]
+        },
+        {
+          "step": 43,
+          "day": 31,
+          "action_type": "request_missing_documents",
+          "reward": -17.0987,
+          "invalid": false,
+          "total_backlog": 429,
+          "total_completed": 36,
+          "model_used": "heuristic",
+          "notes": [
+            "Sent missing-doc requests for 3 case(s) in income_certificate"
+          ]
+        },
+        {
+          "step": 44,
+          "day": 32,
+          "action_type": "advance_time",
+          "reward": -22.23,
+          "invalid": false,
+          "total_backlog": 442,
+          "total_completed": 38,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 32 simulated"
+          ]
+        },
+        {
+          "step": 45,
+          "day": 33,
+          "action_type": "advance_time",
+          "reward": -24.2424,
+          "invalid": false,
+          "total_backlog": 455,
+          "total_completed": 40,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 33 simulated"
+          ]
+        },
+        {
+          "step": 46,
+          "day": 34,
+          "action_type": "advance_time",
+          "reward": -28.8071,
+          "invalid": false,
+          "total_backlog": 469,
+          "total_completed": 41,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 34 simulated"
+          ]
+        },
+        {
+          "step": 47,
+          "day": 34,
+          "action_type": "request_missing_documents",
+          "reward": -18.7071,
+          "invalid": false,
+          "total_backlog": 469,
+          "total_completed": 41,
+          "model_used": "heuristic",
+          "notes": [
+            "Sent missing-doc requests for 3 case(s) in income_certificate"
+          ]
+        },
+        {
+          "step": 48,
+          "day": 35,
+          "action_type": "advance_time",
+          "reward": -23.8371,
+          "invalid": false,
+          "total_backlog": 482,
+          "total_completed": 43,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 35 simulated"
+          ]
+        },
+        {
+          "step": 49,
+          "day": 36,
+          "action_type": "advance_time",
+          "reward": -24.35,
+          "invalid": false,
+          "total_backlog": 495,
+          "total_completed": 45,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 36 simulated"
+          ]
+        },
+        {
+          "step": 50,
+          "day": 37,
+          "action_type": "advance_time",
+          "reward": -31.8978,
+          "invalid": false,
+          "total_backlog": 509,
+          "total_completed": 46,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 37 simulated"
+          ]
+        },
+        {
+          "step": 51,
+          "day": 37,
+          "action_type": "request_missing_documents",
+          "reward": -20.2978,
+          "invalid": false,
+          "total_backlog": 509,
+          "total_completed": 46,
+          "model_used": "heuristic",
+          "notes": [
+            "Sent missing-doc requests for 3 case(s) in income_certificate"
+          ]
+        },
+        {
+          "step": 52,
+          "day": 38,
+          "action_type": "advance_time",
+          "reward": -30.9621,
+          "invalid": false,
+          "total_backlog": 523,
+          "total_completed": 47,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 38 simulated"
+          ]
+        },
+        {
+          "step": 53,
+          "day": 39,
+          "action_type": "advance_time",
+          "reward": -25.9759,
+          "invalid": false,
+          "total_backlog": 536,
+          "total_completed": 49,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 39 simulated"
+          ]
+        },
+        {
+          "step": 54,
+          "day": 39,
+          "action_type": "request_missing_documents",
+          "reward": -21.3759,
+          "invalid": false,
+          "total_backlog": 536,
+          "total_completed": 49,
+          "model_used": "heuristic",
+          "notes": [
+            "Sent missing-doc requests for 3 case(s) in income_certificate"
+          ]
+        },
+        {
+          "step": 55,
+          "day": 40,
+          "action_type": "advance_time",
+          "reward": -28.005,
+          "invalid": false,
+          "total_backlog": 549,
+          "total_completed": 51,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 40 simulated"
+          ]
+        },
+        {
+          "step": 56,
+          "day": 40,
+          "action_type": "escalate_service",
+          "reward": -21.905,
+          "invalid": false,
+          "total_backlog": 549,
+          "total_completed": 51,
+          "model_used": "heuristic",
+          "notes": [
+            "Escalated case case-000001 (income_certificate)"
+          ]
+        },
+        {
+          "step": 57,
+          "day": 41,
+          "action_type": "advance_time",
+          "reward": -36.6039,
+          "invalid": false,
+          "total_backlog": 564,
+          "total_completed": 51,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 41 simulated"
+          ]
+        },
+        {
+          "step": 58,
+          "day": 41,
+          "action_type": "escalate_service",
+          "reward": -22.5039,
+          "invalid": false,
+          "total_backlog": 564,
+          "total_completed": 51,
+          "model_used": "heuristic",
+          "notes": [
+            "Escalated case case-000008 (income_certificate)"
+          ]
+        },
+        {
+          "step": 59,
+          "day": 42,
+          "action_type": "advance_time",
+          "reward": -35.7029,
+          "invalid": false,
+          "total_backlog": 579,
+          "total_completed": 51,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 42 simulated"
+          ]
+        },
+        {
+          "step": 60,
+          "day": 42,
+          "action_type": "request_missing_documents",
+          "reward": -23.1029,
+          "invalid": false,
+          "total_backlog": 579,
+          "total_completed": 51,
+          "model_used": "heuristic",
+          "notes": [
+            "Sent missing-doc requests for 3 case(s) in income_certificate"
+          ]
+        },
+        {
+          "step": 61,
+          "day": 43,
+          "action_type": "advance_time",
+          "reward": -20.1465,
+          "invalid": false,
+          "total_backlog": 590,
+          "total_completed": 55,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 43 simulated"
+          ]
+        },
+        {
+          "step": 62,
+          "day": 43,
+          "action_type": "escalate_service",
+          "reward": -23.5465,
+          "invalid": false,
+          "total_backlog": 590,
+          "total_completed": 55,
+          "model_used": "heuristic",
+          "notes": [
+            "Escalated case case-000018 (income_certificate)"
+          ]
+        },
+        {
+          "step": 63,
+          "day": 44,
+          "action_type": "advance_time",
+          "reward": -32.6964,
+          "invalid": false,
+          "total_backlog": 604,
+          "total_completed": 56,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 44 simulated"
+          ]
+        },
+        {
+          "step": 64,
+          "day": 44,
+          "action_type": "escalate_service",
+          "reward": -24.0964,
+          "invalid": false,
+          "total_backlog": 604,
+          "total_completed": 56,
+          "model_used": "heuristic",
+          "notes": [
+            "Escalated case case-000020 (income_certificate)"
+          ]
+        },
+        {
+          "step": 65,
+          "day": 45,
+          "action_type": "advance_time",
+          "reward": -32.2244,
+          "invalid": false,
+          "total_backlog": 617,
+          "total_completed": 58,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 45 simulated"
+          ]
+        }
+      ],
+      "elapsed_seconds": 0.07,
+      "model_rotations": [],
+      "timestamp": "2026-04-25T15:51:49.612055"
+    },
+    {
+      "task_id": "cross_department_hard",
+      "agent": "heuristic",
+      "primary_model": "heuristic",
+      "seed": 33,
+      "score": 0.6062836579925651,
+      "grader_name": "hard",
+      "total_steps": 80,
+      "total_reward": -2318.78,
+      "total_completed": 83,
+      "total_sla_breaches": 723,
+      "total_invalid_actions": 0,
+      "final_day": 58,
+      "terminated": false,
+      "truncated": false,
+      "grader_metrics": {
+        "completion_rate": 0.0617,
+        "sla_compliance_rate": 0.4625,
+        "idle_efficiency": 1.0,
+        "document_rework_quality": 1.0,
+        "urgent_served_rate": 0.378,
+        "fairness_score": 0.9876,
+        "escalation_discipline": 1.0,
+        "fairness_gap": 0.0124,
+        "total_cases_arrived": 1345,
+        "total_completed": 83,
+        "total_sla_breached": 723,
+        "total_rejected": 0,
+        "avg_waiting_days": 15.63
+      },
+      "step_log": [
+        {
+          "step": 1,
+          "day": 0,
+          "action_type": "set_priority_mode",
+          "reward": 0.1,
+          "invalid": false,
+          "total_backlog": 0,
+          "total_completed": 0,
+          "model_used": "heuristic",
+          "notes": [
+            "Priority mode changed: balanced -> urgent_first"
+          ]
+        },
+        {
+          "step": 2,
+          "day": 1,
+          "action_type": "advance_time",
+          "reward": 5.56,
+          "invalid": false,
+          "total_backlog": 21,
+          "total_completed": 0,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 1 simulated"
+          ]
+        },
+        {
+          "step": 3,
+          "day": 1,
+          "action_type": "request_missing_documents",
+          "reward": -0.74,
+          "invalid": false,
+          "total_backlog": 21,
+          "total_completed": 0,
+          "model_used": "heuristic",
+          "notes": [
+            "Sent missing-doc requests for 3 case(s) in income_certificate"
+          ]
+        },
+        {
+          "step": 4,
+          "day": 2,
+          "action_type": "advance_time",
+          "reward": 6.82,
+          "invalid": false,
+          "total_backlog": 42,
+          "total_completed": 0,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 2 simulated"
+          ]
+        },
+        {
+          "step": 5,
+          "day": 3,
+          "action_type": "advance_time",
+          "reward": 5.58,
+          "invalid": false,
+          "total_backlog": 73,
+          "total_completed": 0,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 3 simulated"
+          ]
+        },
+        {
+          "step": 6,
+          "day": 4,
+          "action_type": "advance_time",
+          "reward": 12.82,
+          "invalid": false,
+          "total_backlog": 92,
+          "total_completed": 2,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 4 simulated"
+          ]
+        },
+        {
+          "step": 7,
+          "day": 4,
+          "action_type": "request_missing_documents",
+          "reward": -3.58,
+          "invalid": false,
+          "total_backlog": 92,
+          "total_completed": 2,
+          "model_used": "heuristic",
+          "notes": [
+            "Sent missing-doc requests for 3 case(s) in income_certificate"
+          ]
+        },
+        {
+          "step": 8,
+          "day": 5,
+          "action_type": "advance_time",
+          "reward": 8.02,
+          "invalid": false,
+          "total_backlog": 112,
+          "total_completed": 3,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 5 simulated"
+          ]
+        },
+        {
+          "step": 9,
+          "day": 6,
+          "action_type": "advance_time",
+          "reward": 15.3,
+          "invalid": false,
+          "total_backlog": 130,
+          "total_completed": 6,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 6 simulated"
+          ]
+        },
+        {
+          "step": 10,
+          "day": 7,
+          "action_type": "advance_time",
+          "reward": 10.54,
+          "invalid": false,
+          "total_backlog": 149,
+          "total_completed": 8,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 7 simulated"
+          ]
+        },
+        {
+          "step": 11,
+          "day": 7,
+          "action_type": "request_missing_documents",
+          "reward": -5.86,
+          "invalid": false,
+          "total_backlog": 149,
+          "total_completed": 8,
+          "model_used": "heuristic",
+          "notes": [
+            "Sent missing-doc requests for 3 case(s) in income_certificate"
+          ]
+        },
+        {
+          "step": 12,
+          "day": 8,
+          "action_type": "advance_time",
+          "reward": 1.7,
+          "invalid": false,
+          "total_backlog": 170,
+          "total_completed": 8,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 8 simulated"
+          ]
+        },
+        {
+          "step": 13,
+          "day": 9,
+          "action_type": "advance_time",
+          "reward": 8.94,
+          "invalid": false,
+          "total_backlog": 189,
+          "total_completed": 10,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 9 simulated"
+          ]
+        },
+        {
+          "step": 14,
+          "day": 10,
+          "action_type": "advance_time",
+          "reward": 12.22,
+          "invalid": false,
+          "total_backlog": 207,
+          "total_completed": 13,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 10 simulated"
+          ]
+        },
+        {
+          "step": 15,
+          "day": 10,
+          "action_type": "request_missing_documents",
+          "reward": -8.18,
+          "invalid": false,
+          "total_backlog": 207,
+          "total_completed": 13,
+          "model_used": "heuristic",
+          "notes": [
+            "Sent missing-doc requests for 3 case(s) in income_certificate"
+          ]
+        },
+        {
+          "step": 16,
+          "day": 11,
+          "action_type": "advance_time",
+          "reward": 7.46,
+          "invalid": false,
+          "total_backlog": 226,
+          "total_completed": 15,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 11 simulated"
+          ]
+        },
+        {
+          "step": 17,
+          "day": 12,
+          "action_type": "advance_time",
+          "reward": -15.88,
+          "invalid": false,
+          "total_backlog": 257,
+          "total_completed": 16,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 12 simulated"
+          ]
+        },
+        {
+          "step": 18,
+          "day": 13,
+          "action_type": "advance_time",
+          "reward": 5.46,
+          "invalid": false,
+          "total_backlog": 276,
+          "total_completed": 18,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 13 simulated"
+          ]
+        },
+        {
+          "step": 19,
+          "day": 13,
+          "action_type": "request_missing_documents",
+          "reward": -10.94,
+          "invalid": false,
+          "total_backlog": 276,
+          "total_completed": 18,
+          "model_used": "heuristic",
+          "notes": [
+            "Sent missing-doc requests for 3 case(s) in income_certificate"
+          ]
+        },
+        {
+          "step": 20,
+          "day": 14,
+          "action_type": "advance_time",
+          "reward": 0.22,
+          "invalid": false,
+          "total_backlog": 307,
+          "total_completed": 19,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 14 simulated"
+          ]
+        },
+        {
+          "step": 21,
+          "day": 15,
+          "action_type": "advance_time",
+          "reward": -4.62,
+          "invalid": false,
+          "total_backlog": 328,
+          "total_completed": 19,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 15 simulated"
+          ]
+        },
+        {
+          "step": 22,
+          "day": 16,
+          "action_type": "advance_time",
+          "reward": -1.42,
+          "invalid": false,
+          "total_backlog": 348,
+          "total_completed": 20,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 16 simulated"
+          ]
+        },
+        {
+          "step": 23,
+          "day": 16,
+          "action_type": "request_missing_documents",
+          "reward": -13.82,
+          "invalid": false,
+          "total_backlog": 348,
+          "total_completed": 20,
+          "model_used": "heuristic",
+          "notes": [
+            "Sent missing-doc requests for 3 case(s) in income_certificate"
+          ]
+        },
+        {
+          "step": 24,
+          "day": 17,
+          "action_type": "advance_time",
+          "reward": -5.88,
+          "invalid": false,
+          "total_backlog": 377,
+          "total_completed": 23,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 17 simulated"
+          ]
+        },
+        {
+          "step": 25,
+          "day": 18,
+          "action_type": "advance_time",
+          "reward": -0.04,
+          "invalid": false,
+          "total_backlog": 396,
+          "total_completed": 25,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 18 simulated"
+          ]
+        },
+        {
+          "step": 26,
+          "day": 19,
+          "action_type": "advance_time",
+          "reward": -4.14,
+          "invalid": false,
+          "total_backlog": 416,
+          "total_completed": 26,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 19 simulated"
+          ]
+        },
+        {
+          "step": 27,
+          "day": 19,
+          "action_type": "request_missing_documents",
+          "reward": -16.54,
+          "invalid": false,
+          "total_backlog": 416,
+          "total_completed": 26,
+          "model_used": "heuristic",
+          "notes": [
+            "Sent missing-doc requests for 3 case(s) in income_certificate"
+          ]
+        },
+        {
+          "step": 28,
+          "day": 20,
+          "action_type": "advance_time",
+          "reward": -5.34,
+          "invalid": false,
+          "total_backlog": 446,
+          "total_completed": 27,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 20 simulated"
+          ]
+        },
+        {
+          "step": 29,
+          "day": 21,
+          "action_type": "advance_time",
+          "reward": 1.54,
+          "invalid": false,
+          "total_backlog": 474,
+          "total_completed": 30,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 21 simulated"
+          ]
+        },
+        {
+          "step": 30,
+          "day": 22,
+          "action_type": "advance_time",
+          "reward": 0.12,
+          "invalid": false,
+          "total_backlog": 492,
+          "total_completed": 33,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 22 simulated"
+          ]
+        },
+        {
+          "step": 31,
+          "day": 22,
+          "action_type": "request_missing_documents",
+          "reward": -19.58,
+          "invalid": false,
+          "total_backlog": 492,
+          "total_completed": 33,
+          "model_used": "heuristic",
+          "notes": [
+            "Sent missing-doc requests for 3 case(s) in income_certificate"
+          ]
+        },
+        {
+          "step": 32,
+          "day": 23,
+          "action_type": "advance_time",
+          "reward": -3.94,
+          "invalid": false,
+          "total_backlog": 511,
+          "total_completed": 35,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 23 simulated"
+          ]
+        },
+        {
+          "step": 33,
+          "day": 24,
+          "action_type": "advance_time",
+          "reward": -26.38,
+          "invalid": false,
+          "total_backlog": 532,
+          "total_completed": 35,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 24 simulated"
+          ]
+        },
+        {
+          "step": 34,
+          "day": 25,
+          "action_type": "advance_time",
+          "reward": -31.14,
+          "invalid": false,
+          "total_backlog": 551,
+          "total_completed": 37,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 25 simulated"
+          ]
+        },
+        {
+          "step": 35,
+          "day": 25,
+          "action_type": "request_missing_documents",
+          "reward": -21.94,
+          "invalid": false,
+          "total_backlog": 551,
+          "total_completed": 37,
+          "model_used": "heuristic",
+          "notes": [
+            "Sent missing-doc requests for 3 case(s) in income_certificate"
+          ]
+        },
+        {
+          "step": 36,
+          "day": 26,
+          "action_type": "advance_time",
+          "reward": -51.34,
+          "invalid": false,
+          "total_backlog": 581,
+          "total_completed": 38,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 26 simulated"
+          ]
+        },
+        {
+          "step": 37,
+          "day": 27,
+          "action_type": "advance_time",
+          "reward": -32.64,
+          "invalid": false,
+          "total_backlog": 601,
+          "total_completed": 39,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 27 simulated"
+          ]
+        },
+        {
+          "step": 38,
+          "day": 28,
+          "action_type": "advance_time",
+          "reward": -33.44,
+          "invalid": false,
+          "total_backlog": 621,
+          "total_completed": 40,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 28 simulated"
+          ]
+        },
+        {
+          "step": 39,
+          "day": 28,
+          "action_type": "request_missing_documents",
+          "reward": -24.74,
+          "invalid": false,
+          "total_backlog": 621,
+          "total_completed": 40,
+          "model_used": "heuristic",
+          "notes": [
+            "Sent missing-doc requests for 3 case(s) in income_certificate"
+          ]
+        },
+        {
+          "step": 40,
+          "day": 29,
+          "action_type": "advance_time",
+          "reward": -33.44,
+          "invalid": false,
+          "total_backlog": 641,
+          "total_completed": 41,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 29 simulated"
+          ]
+        },
+        {
+          "step": 41,
+          "day": 30,
+          "action_type": "advance_time",
+          "reward": -49.0,
+          "invalid": false,
+          "total_backlog": 660,
+          "total_completed": 43,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 30 simulated"
+          ]
+        },
+        {
+          "step": 42,
+          "day": 31,
+          "action_type": "advance_time",
+          "reward": -44.8,
+          "invalid": false,
+          "total_backlog": 680,
+          "total_completed": 44,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 31 simulated"
+          ]
+        },
+        {
+          "step": 43,
+          "day": 31,
+          "action_type": "request_missing_documents",
+          "reward": -27.1,
+          "invalid": false,
+          "total_backlog": 680,
+          "total_completed": 44,
+          "model_used": "heuristic",
+          "notes": [
+            "Sent missing-doc requests for 3 case(s) in income_certificate"
+          ]
+        },
+        {
+          "step": 44,
+          "day": 32,
+          "action_type": "advance_time",
+          "reward": -35.8,
+          "invalid": false,
+          "total_backlog": 700,
+          "total_completed": 45,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 32 simulated"
+          ]
+        },
+        {
+          "step": 45,
+          "day": 33,
+          "action_type": "advance_time",
+          "reward": -31.28,
+          "invalid": false,
+          "total_backlog": 717,
+          "total_completed": 49,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 33 simulated"
+          ]
+        },
+        {
+          "step": 46,
+          "day": 34,
+          "action_type": "advance_time",
+          "reward": -59.52,
+          "invalid": false,
+          "total_backlog": 748,
+          "total_completed": 50,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 34 simulated"
+          ]
+        },
+        {
+          "step": 47,
+          "day": 34,
+          "action_type": "request_missing_documents",
+          "reward": -29.82,
+          "invalid": false,
+          "total_backlog": 748,
+          "total_completed": 50,
+          "model_used": "heuristic",
+          "notes": [
+            "Sent missing-doc requests for 3 case(s) in income_certificate"
+          ]
+        },
+        {
+          "step": 48,
+          "day": 35,
+          "action_type": "advance_time",
+          "reward": -47.74,
+          "invalid": false,
+          "total_backlog": 766,
+          "total_completed": 53,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 35 simulated"
+          ]
+        },
+        {
+          "step": 49,
+          "day": 36,
+          "action_type": "advance_time",
+          "reward": -56.08,
+          "invalid": false,
+          "total_backlog": 787,
+          "total_completed": 53,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 36 simulated"
+          ]
+        },
+        {
+          "step": 50,
+          "day": 37,
+          "action_type": "advance_time",
+          "reward": -26.34,
+          "invalid": false,
+          "total_backlog": 806,
+          "total_completed": 55,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 37 simulated"
+          ]
+        },
+        {
+          "step": 51,
+          "day": 37,
+          "action_type": "request_missing_documents",
+          "reward": -32.14,
+          "invalid": false,
+          "total_backlog": 806,
+          "total_completed": 55,
+          "model_used": "heuristic",
+          "notes": [
+            "Sent missing-doc requests for 3 case(s) in income_certificate"
+          ]
+        },
+        {
+          "step": 52,
+          "day": 38,
+          "action_type": "advance_time",
+          "reward": -43.6,
+          "invalid": false,
+          "total_backlog": 825,
+          "total_completed": 57,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 38 simulated"
+          ]
+        },
+        {
+          "step": 53,
+          "day": 39,
+          "action_type": "advance_time",
+          "reward": -56.36,
+          "invalid": false,
+          "total_backlog": 844,
+          "total_completed": 59,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 39 simulated"
+          ]
+        },
+        {
+          "step": 54,
+          "day": 40,
+          "action_type": "advance_time",
+          "reward": -50.66,
+          "invalid": false,
+          "total_backlog": 864,
+          "total_completed": 60,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 40 simulated"
+          ]
+        },
+        {
+          "step": 55,
+          "day": 40,
+          "action_type": "request_missing_documents",
+          "reward": -34.46,
+          "invalid": false,
+          "total_backlog": 864,
+          "total_completed": 60,
+          "model_used": "heuristic",
+          "notes": [
+            "Sent missing-doc requests for 3 case(s) in income_certificate"
+          ]
+        },
+        {
+          "step": 56,
+          "day": 41,
+          "action_type": "advance_time",
+          "reward": -21.34,
+          "invalid": false,
+          "total_backlog": 881,
+          "total_completed": 64,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 41 simulated"
+          ]
+        },
+        {
+          "step": 57,
+          "day": 42,
+          "action_type": "advance_time",
+          "reward": -62.64,
+          "invalid": false,
+          "total_backlog": 901,
+          "total_completed": 65,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 42 simulated"
+          ]
+        },
+        {
+          "step": 58,
+          "day": 43,
+          "action_type": "advance_time",
+          "reward": -72.44,
+          "invalid": false,
+          "total_backlog": 921,
+          "total_completed": 66,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 43 simulated"
+          ]
+        },
+        {
+          "step": 59,
+          "day": 43,
+          "action_type": "request_missing_documents",
+          "reward": -36.74,
+          "invalid": false,
+          "total_backlog": 921,
+          "total_completed": 66,
+          "model_used": "heuristic",
+          "notes": [
+            "Sent missing-doc requests for 3 case(s) in income_certificate"
+          ]
+        },
+        {
+          "step": 60,
+          "day": 44,
+          "action_type": "advance_time",
+          "reward": -57.78,
+          "invalid": false,
+          "total_backlog": 942,
+          "total_completed": 66,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 44 simulated"
+          ]
+        },
+        {
+          "step": 61,
+          "day": 45,
+          "action_type": "advance_time",
+          "reward": -64.28,
+          "invalid": false,
+          "total_backlog": 962,
+          "total_completed": 67,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 45 simulated"
+          ]
+        },
+        {
+          "step": 62,
+          "day": 46,
+          "action_type": "advance_time",
+          "reward": -44.54,
+          "invalid": false,
+          "total_backlog": 981,
+          "total_completed": 69,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 46 simulated"
+          ]
+        },
+        {
+          "step": 63,
+          "day": 46,
+          "action_type": "request_missing_documents",
+          "reward": -39.14,
+          "invalid": false,
+          "total_backlog": 981,
+          "total_completed": 69,
+          "model_used": "heuristic",
+          "notes": [
+            "Sent missing-doc requests for 3 case(s) in income_certificate"
+          ]
+        },
+        {
+          "step": 64,
+          "day": 47,
+          "action_type": "advance_time",
+          "reward": -57.64,
+          "invalid": false,
+          "total_backlog": 1001,
+          "total_completed": 70,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 47 simulated"
+          ]
+        },
+        {
+          "step": 65,
+          "day": 48,
+          "action_type": "advance_time",
+          "reward": -72.8,
+          "invalid": false,
+          "total_backlog": 1030,
+          "total_completed": 72,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 48 simulated"
+          ]
+        },
+        {
+          "step": 66,
+          "day": 49,
+          "action_type": "advance_time",
+          "reward": -62.14,
+          "invalid": false,
+          "total_backlog": 1051,
+          "total_completed": 72,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 49 simulated"
+          ]
+        },
+        {
+          "step": 67,
+          "day": 49,
+          "action_type": "request_missing_documents",
+          "reward": -41.94,
+          "invalid": false,
+          "total_backlog": 1051,
+          "total_completed": 72,
+          "model_used": "heuristic",
+          "notes": [
+            "Sent missing-doc requests for 3 case(s) in income_certificate"
+          ]
+        },
+        {
+          "step": 68,
+          "day": 50,
+          "action_type": "advance_time",
+          "reward": -55.92,
+          "invalid": false,
+          "total_backlog": 1083,
+          "total_completed": 72,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 50 simulated"
+          ]
+        },
+        {
+          "step": 69,
+          "day": 51,
+          "action_type": "advance_time",
+          "reward": -67.36,
+          "invalid": false,
+          "total_backlog": 1114,
+          "total_completed": 73,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 51 simulated"
+          ]
+        },
+        {
+          "step": 70,
+          "day": 52,
+          "action_type": "advance_time",
+          "reward": -63.42,
+          "invalid": false,
+          "total_backlog": 1133,
+          "total_completed": 75,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 52 simulated"
+          ]
+        },
+        {
+          "step": 71,
+          "day": 52,
+          "action_type": "request_missing_documents",
+          "reward": -45.22,
+          "invalid": false,
+          "total_backlog": 1133,
+          "total_completed": 75,
+          "model_used": "heuristic",
+          "notes": [
+            "Sent missing-doc requests for 3 case(s) in income_certificate"
+          ]
+        },
+        {
+          "step": 72,
+          "day": 53,
+          "action_type": "advance_time",
+          "reward": -61.18,
+          "invalid": false,
+          "total_backlog": 1152,
+          "total_completed": 77,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 53 simulated"
+          ]
+        },
+        {
+          "step": 73,
+          "day": 54,
+          "action_type": "advance_time",
+          "reward": -70.46,
+          "invalid": false,
+          "total_backlog": 1184,
+          "total_completed": 77,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 54 simulated"
+          ]
+        },
+        {
+          "step": 74,
+          "day": 55,
+          "action_type": "advance_time",
+          "reward": -63.22,
+          "invalid": false,
+          "total_backlog": 1203,
+          "total_completed": 79,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 55 simulated"
+          ]
+        },
+        {
+          "step": 75,
+          "day": 55,
+          "action_type": "request_missing_documents",
+          "reward": -48.02,
+          "invalid": false,
+          "total_backlog": 1203,
+          "total_completed": 79,
+          "model_used": "heuristic",
+          "notes": [
+            "Sent missing-doc requests for 3 case(s) in income_certificate"
+          ]
+        },
+        {
+          "step": 76,
+          "day": 56,
+          "action_type": "advance_time",
+          "reward": -71.48,
+          "invalid": false,
+          "total_backlog": 1222,
+          "total_completed": 81,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 56 simulated"
+          ]
+        },
+        {
+          "step": 77,
+          "day": 56,
+          "action_type": "escalate_service",
+          "reward": -48.78,
+          "invalid": false,
+          "total_backlog": 1222,
+          "total_completed": 81,
+          "model_used": "heuristic",
+          "notes": [
+            "Escalated case case-000001 (income_certificate)"
+          ]
+        },
+        {
+          "step": 78,
+          "day": 57,
+          "action_type": "advance_time",
+          "reward": -73.28,
+          "invalid": false,
+          "total_backlog": 1242,
+          "total_completed": 82,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 57 simulated"
+          ]
+        },
+        {
+          "step": 79,
+          "day": 57,
+          "action_type": "escalate_service",
+          "reward": -49.58,
+          "invalid": false,
+          "total_backlog": 1242,
+          "total_completed": 82,
+          "model_used": "heuristic",
+          "notes": [
+            "Escalated case case-000002 (income_certificate)"
+          ]
+        },
+        {
+          "step": 80,
+          "day": 58,
+          "action_type": "advance_time",
+          "reward": -69.58,
+          "invalid": false,
+          "total_backlog": 1262,
+          "total_completed": 83,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 58 simulated"
+          ]
+        }
+      ],
+      "elapsed_seconds": 0.17,
+      "model_rotations": [],
+      "timestamp": "2026-04-25T15:51:49.783493"
+    },
+    {
+      "task_id": "district_backlog_easy_extreme",
+      "agent": "heuristic",
+      "primary_model": "heuristic",
+      "seed": 42,
+      "score": 0.448931623931624,
+      "grader_name": "easy",
+      "total_steps": 45,
+      "total_reward": -377.68,
+      "total_completed": 38,
+      "total_sla_breaches": 184,
+      "total_invalid_actions": 0,
+      "final_day": 30,
+      "terminated": false,
+      "truncated": true,
+      "grader_metrics": {
+        "completion_rate": 0.0812,
+        "sla_compliance_rate": 0.6068,
+        "idle_efficiency": 1.0,
+        "document_rework_quality": 1.0,
+        "urgent_served_rate": 0.5758,
+        "fairness_score": 1.0,
+        "escalation_discipline": 1.0,
+        "fairness_gap": 0.0,
+        "total_cases_arrived": 468,
+        "total_completed": 38,
+        "total_sla_breached": 184,
+        "total_rejected": 0,
+        "avg_waiting_days": 6.92
+      },
+      "step_log": [
+        {
+          "step": 1,
+          "day": 0,
+          "action_type": "set_priority_mode",
+          "reward": 0.1,
+          "invalid": false,
+          "total_backlog": 0,
+          "total_completed": 0,
+          "model_used": "heuristic",
+          "notes": [
+            "Priority mode changed: balanced -> urgent_first"
+          ]
+        },
+        {
+          "step": 2,
+          "day": 1,
+          "action_type": "advance_time",
+          "reward": 4.74,
+          "invalid": false,
+          "total_backlog": 24,
+          "total_completed": 0,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 1 simulated"
+          ]
+        },
+        {
+          "step": 3,
+          "day": 1,
+          "action_type": "request_missing_documents",
+          "reward": -0.86,
+          "invalid": false,
+          "total_backlog": 24,
+          "total_completed": 0,
+          "model_used": "heuristic",
+          "notes": [
+            "Sent missing-doc requests for 3 case(s) in income_certificate"
+          ]
+        },
+        {
+          "step": 4,
+          "day": 2,
+          "action_type": "advance_time",
+          "reward": 4.26,
+          "invalid": false,
+          "total_backlog": 36,
+          "total_completed": 0,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 2 simulated"
+          ]
+        },
+        {
+          "step": 5,
+          "day": 3,
+          "action_type": "advance_time",
+          "reward": 3.3,
+          "invalid": false,
+          "total_backlog": 60,
+          "total_completed": 0,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 3 simulated"
+          ]
+        },
+        {
+          "step": 6,
+          "day": 4,
+          "action_type": "advance_time",
+          "reward": 14.94,
+          "invalid": false,
+          "total_backlog": 69,
+          "total_completed": 3,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 4 simulated"
+          ]
+        },
+        {
+          "step": 7,
+          "day": 4,
+          "action_type": "request_missing_documents",
+          "reward": -2.66,
+          "invalid": false,
+          "total_backlog": 69,
+          "total_completed": 3,
+          "model_used": "heuristic",
+          "notes": [
+            "Sent missing-doc requests for 3 case(s) in income_certificate"
+          ]
+        },
+        {
+          "step": 8,
+          "day": 5,
+          "action_type": "advance_time",
+          "reward": 14.58,
+          "invalid": false,
+          "total_backlog": 78,
+          "total_completed": 6,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 5 simulated"
+          ]
+        },
+        {
+          "step": 9,
+          "day": 6,
+          "action_type": "advance_time",
+          "reward": 0.7,
+          "invalid": false,
+          "total_backlog": 90,
+          "total_completed": 6,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 6 simulated"
+          ]
+        },
+        {
+          "step": 10,
+          "day": 6,
+          "action_type": "request_missing_documents",
+          "reward": -3.5,
+          "invalid": false,
+          "total_backlog": 90,
+          "total_completed": 6,
+          "model_used": "heuristic",
+          "notes": [
+            "Sent missing-doc requests for 3 case(s) in income_certificate"
+          ]
+        },
+        {
+          "step": 11,
+          "day": 7,
+          "action_type": "advance_time",
+          "reward": 9.7,
+          "invalid": false,
+          "total_backlog": 100,
+          "total_completed": 8,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 7 simulated"
+          ]
+        },
+        {
+          "step": 12,
+          "day": 8,
+          "action_type": "advance_time",
+          "reward": 5.26,
+          "invalid": false,
+          "total_backlog": 111,
+          "total_completed": 9,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 8 simulated"
+          ]
+        },
+        {
+          "step": 13,
+          "day": 9,
+          "action_type": "advance_time",
+          "reward": 0.3,
+          "invalid": false,
+          "total_backlog": 135,
+          "total_completed": 9,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 9 simulated"
+          ]
+        },
+        {
+          "step": 14,
+          "day": 9,
+          "action_type": "request_missing_documents",
+          "reward": -5.3,
+          "invalid": false,
+          "total_backlog": 135,
+          "total_completed": 9,
+          "model_used": "heuristic",
+          "notes": [
+            "Sent missing-doc requests for 3 case(s) in income_certificate"
+          ]
+        },
+        {
+          "step": 15,
+          "day": 10,
+          "action_type": "advance_time",
+          "reward": 2.46,
+          "invalid": false,
+          "total_backlog": 146,
+          "total_completed": 10,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 10 simulated"
+          ]
+        },
+        {
+          "step": 16,
+          "day": 11,
+          "action_type": "advance_time",
+          "reward": 11.02,
+          "invalid": false,
+          "total_backlog": 167,
+          "total_completed": 13,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 11 simulated"
+          ]
+        },
+        {
+          "step": 17,
+          "day": 12,
+          "action_type": "advance_time",
+          "reward": -1.46,
+          "invalid": false,
+          "total_backlog": 179,
+          "total_completed": 13,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 12 simulated"
+          ]
+        },
+        {
+          "step": 18,
+          "day": 12,
+          "action_type": "request_missing_documents",
+          "reward": -7.06,
+          "invalid": false,
+          "total_backlog": 179,
+          "total_completed": 13,
+          "model_used": "heuristic",
+          "notes": [
+            "Sent missing-doc requests for 3 case(s) in income_certificate"
+          ]
+        },
+        {
+          "step": 19,
+          "day": 13,
+          "action_type": "advance_time",
+          "reward": -1.94,
+          "invalid": false,
+          "total_backlog": 191,
+          "total_completed": 13,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 13 simulated"
+          ]
+        },
+        {
+          "step": 20,
+          "day": 14,
+          "action_type": "advance_time",
+          "reward": 7.82,
+          "invalid": false,
+          "total_backlog": 212,
+          "total_completed": 16,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 14 simulated"
+          ]
+        },
+        {
+          "step": 21,
+          "day": 15,
+          "action_type": "advance_time",
+          "reward": -11.32,
+          "invalid": false,
+          "total_backlog": 223,
+          "total_completed": 17,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 15 simulated"
+          ]
+        },
+        {
+          "step": 22,
+          "day": 15,
+          "action_type": "request_missing_documents",
+          "reward": -8.82,
+          "invalid": false,
+          "total_backlog": 223,
+          "total_completed": 17,
+          "model_used": "heuristic",
+          "notes": [
+            "Sent missing-doc requests for 3 case(s) in income_certificate"
+          ]
+        },
+        {
+          "step": 23,
+          "day": 16,
+          "action_type": "advance_time",
+          "reward": -1.06,
+          "invalid": false,
+          "total_backlog": 234,
+          "total_completed": 18,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 16 simulated"
+          ]
+        },
+        {
+          "step": 24,
+          "day": 17,
+          "action_type": "advance_time",
+          "reward": 12.02,
+          "invalid": false,
+          "total_backlog": 242,
+          "total_completed": 22,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 17 simulated"
+          ]
+        },
+        {
+          "step": 25,
+          "day": 18,
+          "action_type": "advance_time",
+          "reward": -4.46,
+          "invalid": false,
+          "total_backlog": 254,
+          "total_completed": 22,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 18 simulated"
+          ]
+        },
+        {
+          "step": 26,
+          "day": 18,
+          "action_type": "request_missing_documents",
+          "reward": -10.06,
+          "invalid": false,
+          "total_backlog": 254,
+          "total_completed": 22,
+          "model_used": "heuristic",
+          "notes": [
+            "Sent missing-doc requests for 3 case(s) in income_certificate"
+          ]
+        },
+        {
+          "step": 27,
+          "day": 19,
+          "action_type": "advance_time",
+          "reward": -19.48,
+          "invalid": false,
+          "total_backlog": 277,
+          "total_completed": 23,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 19 simulated"
+          ]
+        },
+        {
+          "step": 28,
+          "day": 20,
+          "action_type": "advance_time",
+          "reward": -37.92,
+          "invalid": false,
+          "total_backlog": 288,
+          "total_completed": 24,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 20 simulated"
+          ]
+        },
+        {
+          "step": 29,
+          "day": 21,
+          "action_type": "advance_time",
+          "reward": 1.78,
+          "invalid": false,
+          "total_backlog": 298,
+          "total_completed": 26,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 21 simulated"
+          ]
+        },
+        {
+          "step": 30,
+          "day": 21,
+          "action_type": "request_missing_documents",
+          "reward": -11.82,
+          "invalid": false,
+          "total_backlog": 298,
+          "total_completed": 26,
+          "model_used": "heuristic",
+          "notes": [
+            "Sent missing-doc requests for 3 case(s) in income_certificate"
+          ]
+        },
+        {
+          "step": 31,
+          "day": 22,
+          "action_type": "advance_time",
+          "reward": -20.76,
+          "invalid": false,
+          "total_backlog": 309,
+          "total_completed": 27,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 22 simulated"
+          ]
+        },
+        {
+          "step": 32,
+          "day": 23,
+          "action_type": "advance_time",
+          "reward": -67.14,
+          "invalid": false,
+          "total_backlog": 321,
+          "total_completed": 27,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 23 simulated"
+          ]
+        },
+        {
+          "step": 33,
+          "day": 24,
+          "action_type": "advance_time",
+          "reward": -22.16,
+          "invalid": false,
+          "total_backlog": 344,
+          "total_completed": 28,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 24 simulated"
+          ]
+        },
+        {
+          "step": 34,
+          "day": 24,
+          "action_type": "request_missing_documents",
+          "reward": -13.66,
+          "invalid": false,
+          "total_backlog": 344,
+          "total_completed": 28,
+          "model_used": "heuristic",
+          "notes": [
+            "Sent missing-doc requests for 3 case(s) in income_certificate"
+          ]
+        },
+        {
+          "step": 35,
+          "day": 25,
+          "action_type": "advance_time",
+          "reward": -46.52,
+          "invalid": false,
+          "total_backlog": 368,
+          "total_completed": 28,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 25 simulated"
+          ]
+        },
+        {
+          "step": 36,
+          "day": 25,
+          "action_type": "escalate_service",
+          "reward": -14.62,
+          "invalid": false,
+          "total_backlog": 368,
+          "total_completed": 28,
+          "model_used": "heuristic",
+          "notes": [
+            "Escalated case case-000001 (income_certificate)"
+          ]
+        },
+        {
+          "step": 37,
+          "day": 26,
+          "action_type": "advance_time",
+          "reward": -16.52,
+          "invalid": false,
+          "total_backlog": 378,
+          "total_completed": 30,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 26 simulated"
+          ]
+        },
+        {
+          "step": 38,
+          "day": 26,
+          "action_type": "escalate_service",
+          "reward": -15.02,
+          "invalid": false,
+          "total_backlog": 378,
+          "total_completed": 30,
+          "model_used": "heuristic",
+          "notes": [
+            "Escalated case case-000002 (income_certificate)"
+          ]
+        },
+        {
+          "step": 39,
+          "day": 27,
+          "action_type": "advance_time",
+          "reward": -28.72,
+          "invalid": false,
+          "total_backlog": 398,
+          "total_completed": 34,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 27 simulated"
+          ]
+        },
+        {
+          "step": 40,
+          "day": 27,
+          "action_type": "request_missing_documents",
+          "reward": -15.82,
+          "invalid": false,
+          "total_backlog": 398,
+          "total_completed": 34,
+          "model_used": "heuristic",
+          "notes": [
+            "Sent missing-doc requests for 3 case(s) in income_certificate"
+          ]
+        },
+        {
+          "step": 41,
+          "day": 28,
+          "action_type": "advance_time",
+          "reward": -10.7,
+          "invalid": false,
+          "total_backlog": 410,
+          "total_completed": 34,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 28 simulated"
+          ]
+        },
+        {
+          "step": 42,
+          "day": 28,
+          "action_type": "escalate_service",
+          "reward": -16.3,
+          "invalid": false,
+          "total_backlog": 410,
+          "total_completed": 34,
+          "model_used": "heuristic",
+          "notes": [
+            "Escalated case case-000005 (income_certificate)"
+          ]
+        },
+        {
+          "step": 43,
+          "day": 29,
+          "action_type": "advance_time",
+          "reward": -21.2,
+          "invalid": false,
+          "total_backlog": 420,
+          "total_completed": 36,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 29 simulated"
+          ]
+        },
+        {
+          "step": 44,
+          "day": 29,
+          "action_type": "escalate_service",
+          "reward": -16.7,
+          "invalid": false,
+          "total_backlog": 420,
+          "total_completed": 36,
+          "model_used": "heuristic",
+          "notes": [
+            "Escalated case case-000006 (income_certificate)"
+          ]
+        },
+        {
+          "step": 45,
+          "day": 30,
+          "action_type": "advance_time",
+          "reward": -17.1,
+          "invalid": false,
+          "total_backlog": 430,
+          "total_completed": 38,
+          "model_used": "heuristic",
+          "notes": [
+            "Day 30 simulated"
+          ]
+        }
+      ],
+      "elapsed_seconds": 0.04,
+      "model_rotations": [],
+      "timestamp": "2026-04-25T15:51:49.824156"
+    }
+  ]
+}

@@ -21,9 +21,8 @@ from typing import Any
 
 from openai import OpenAI
 
+from app.api_gateway import create_env_gateway
 from app.baselines import backlog_clearance_policy
-from app.env import GovWorkflowEnv
-from app.graders import grade_episode
 from app.models import ActionModel, ActionType, ObservationModel
 from app.tasks import get_task
 
@@ -45,6 +44,15 @@ LOCAL_IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME")
 NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY")
 NVIDIA_API_KEY_2 = os.getenv("NVIDIA_API_KEY_2")
 NVIDIA_MODEL = os.getenv("NVIDIA_MODEL", "")
+ENV_TRANSPORT = os.getenv("OPENENV_ENV_TRANSPORT", "auto").strip().lower()
+ENV_BASE_URL = os.getenv("OPENENV_ENV_BASE_URL", "http://127.0.0.1:7860").strip()
+ENV_API_PREFIX = os.getenv("OPENENV_ENV_API_PREFIX", "").strip()
+FORCE_FASTAPI_GATEWAY = os.getenv("FORCE_FASTAPI_GATEWAY", "0").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
 
 LEGACY_MODEL_POOL = [
     "meta/llama-3.3-70b-instruct",
@@ -212,9 +220,14 @@ def _choose_action(
 
 
 def _run_task(runtime: RuntimeContext, task_id: str) -> EpisodeLog:
-    env = GovWorkflowEnv(task_id=task_id)
-    task_cfg = get_task(task_id)
-
+    env = create_env_gateway(
+        task_id=task_id,
+        seed=get_task(task_id).seed,
+        mode=ENV_TRANSPORT if ENV_TRANSPORT in {"auto", "http", "direct"} else "auto",
+        base_url=ENV_BASE_URL,
+        api_prefix=ENV_API_PREFIX,
+        enforce_fastapi=FORCE_FASTAPI_GATEWAY,
+    )
     print(f"[START] task={task_id} env={BENCHMARK} model={runtime.start_model_label}", flush=True)
 
     rewards: list[float] = []
@@ -223,7 +236,7 @@ def _run_task(runtime: RuntimeContext, task_id: str) -> EpisodeLog:
     success = False
 
     try:
-        obs, _ = env.reset(seed=task_cfg.seed)
+        obs = env.reset()
         last_reward = 0.0
 
         for step in range(1, MAX_STEPS + 1):
@@ -240,7 +253,7 @@ def _run_task(runtime: RuntimeContext, task_id: str) -> EpisodeLog:
 
             obs, reward, terminated, truncated, info = env.step(action)
             done = terminated or truncated
-            last_error = info.last_action_error
+            last_error = getattr(info, "last_action_message", None)
 
             rewards.append(float(reward))
             steps_taken = step
@@ -256,7 +269,7 @@ def _run_task(runtime: RuntimeContext, task_id: str) -> EpisodeLog:
             if done:
                 break
 
-        score = float(grade_episode(env.state()).score)
+        score, _grader_name, _metrics = env.grade()
         score = min(max(score, 0.0), 1.0)
         success = score >= SUCCESS_SCORE_THRESHOLD
 

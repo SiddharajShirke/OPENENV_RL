@@ -38,3 +38,6 @@ tests/test_run.txt
 scripts/validate-submission.sh
 results/prevalidation_docker_build.log
 results/prevalidation_*.log
+
+# Keep benchmark Phase 1 model in Git for Colab/Kaggle transfer
+!results/best_model/phase1/phase1_final.zip
