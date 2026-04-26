@@ -1,5 +1,6 @@
 from __future__ import annotations
 from collections.abc import Callable
+from types import SimpleNamespace
 from app.env import GovWorkflowEnv
 from app.graders import grade_episode
 from app.models import ActionModel, ActionType, ObservationModel, PriorityMode, ServiceType
@@ -7,21 +8,57 @@ from app.models import ActionModel, ActionType, ObservationModel, PriorityMode, 
 PolicyFn = Callable[[ObservationModel], ActionModel]
 
 
-def _service_with_max(attr: str, obs: ObservationModel) -> ServiceType | None:
-    queue_snaps = obs.queue_snapshots.values() if isinstance(obs.queue_snapshots, dict) else obs.queue_snapshots
-    v2_attr_map = {
-        "active_cases": "total_pending",
-        "missing_docs_cases": "blocked_missing_docs"
-    }
-    def get_val(s):
-        return getattr(s, attr, getattr(s, v2_attr_map.get(attr, attr), 0))
-    ranked = sorted(queue_snaps,
-                    key=lambda s: (get_val(s), getattr(s, "active_cases", getattr(s, "total_pending", 0)), getattr(s, "service_type", getattr(s, "service", "")).value), reverse=True)
-    return (ranked[0].service_type if hasattr(ranked[0], "service_type") else ranked[0].service) if ranked and get_val(ranked[0]) > 0 else None
+def _snapshots(obs: ObservationModel):
+    """Return queue snapshots as a list regardless of Phase 1 (list) or Phase 2 (dict)."""
+    qs = obs.queue_snapshots
+    if isinstance(qs, dict):
+        return list(qs.values())
+    return list(qs)
 
 
-def greedy_sla_policy(obs: ObservationModel) -> ActionModel:
-    target = _service_with_max("blocked_missing_docs", obs)
+def _service_attr(q, *attrs):
+    """Return the first attribute that exists on a QueueSnapshot (Phase 1 vs Phase 2 names)."""
+    for attr in attrs:
+        val = getattr(q, attr, None)
+        if val is not None:
+            return val
+    return 0
+
+
+def _service_name(q) -> ServiceType:
+    """Return ServiceType regardless of Phase 1 (.service) or Phase 2 (.service_type)."""
+    return getattr(q, "service_type", None) or getattr(q, "service", None)
+
+
+def _service_with_max(obs: ObservationModel, *attrs) -> ServiceType | None:
+    snaps = _snapshots(obs)
+    ranked = sorted(snaps, key=lambda s: _service_attr(s, *attrs), reverse=True)
+    if ranked and _service_attr(ranked[0], *attrs) > 0:
+        return _service_name(ranked[0])
+    return None
+
+
+def _reserve_officers(obs: ObservationModel) -> int:
+    pool = obs.officer_pool
+    # Phase 2: idle_officers property
+    if hasattr(pool, "idle_officers"):
+        return int(pool.idle_officers)
+    # Phase 1 fallback
+    return int(getattr(pool, "reserve_officers", 0))
+
+
+def _alloc_for(obs: ObservationModel, service: ServiceType) -> int:
+    pool = obs.officer_pool
+    # Phase 2 uses 'allocated'; Phase 1 used 'allocations'
+    alloc_dict = getattr(pool, "allocated", None) or getattr(pool, "allocations", {})
+    raw = alloc_dict.get(service)
+    if raw is None:
+        raw = alloc_dict.get(service.value if hasattr(service, "value") else str(service), 0)
+    return int(raw or 0)
+
+
+def urgent_first_policy(obs: ObservationModel) -> ActionModel:
+    target = _service_with_max(obs, "urgent_pending", "urgent_cases")
     if target:
         return ActionModel(action_type=ActionType.REQUEST_MISSING_DOCUMENTS, service_target=target)
     return ActionModel(action_type=ActionType.ADVANCE_TIME)
@@ -32,25 +69,42 @@ def oldest_first_policy(obs: ObservationModel) -> ActionModel:
 
 
 def backlog_clearance_policy(obs: ObservationModel) -> ActionModel:
-    idle_officers = getattr(obs.officer_pool, "idle_officers", getattr(obs.officer_pool, "reserve_officers", 0))
-    if idle_officers > 0:
-        target = _service_with_max("total_pending", obs)
+    snaps = _snapshots(obs)
+
+    # Assign idle officers to the most backlogged service
+    if _reserve_officers(obs) > 0:
+        target = _service_with_max(obs, "total_pending", "active_cases")
         if target:
-            return ActionModel(action_type=ActionType.ASSIGN_CAPACITY, service_target=target, capacity_assignment={target.value: 1})
-    target = _service_with_max("blocked_missing_docs", obs)
+            return ActionModel(
+                action_type=ActionType.ASSIGN_CAPACITY,
+                service_target=target,
+                capacity_assignment={target.value: 1},
+            )
+
+    # Clear missing-doc bottlenecks
+    target = _service_with_max(obs, "blocked_missing_docs", "missing_docs_cases")
     if target:
         return ActionModel(action_type=ActionType.REQUEST_MISSING_DOCUMENTS, service_target=target)
-    
-    queue_snaps = obs.queue_snapshots.values() if isinstance(obs.queue_snapshots, dict) else obs.queue_snapshots
-    hot  = sorted(queue_snaps, key=lambda s: getattr(s, "active_cases", getattr(s, "total_pending", 0)), reverse=True)
-    cold = sorted(queue_snaps, key=lambda s: getattr(s, "active_cases", getattr(s, "total_pending", 0)))
-    if hot and cold and getattr(hot[0], "active_cases", getattr(hot[0], "total_pending", 0)) - getattr(cold[0], "active_cases", getattr(cold[0], "total_pending", 0)) >= 3:
-        src = hot[0].service_type if hasattr(hot[0], "service_type") else hot[0].service
-        tgt = cold[0].service_type if hasattr(cold[0], "service_type") else cold[0].service
-        allocs = getattr(obs.officer_pool, "allocated", getattr(obs.officer_pool, "allocations", {}))
-        if src != tgt and allocs.get(src, allocs.get(src.value if hasattr(src, "value") else src, 0)) > 1:
-            return ActionModel(action_type=ActionType.REALLOCATE_OFFICERS,
-                               reallocation_delta={src.value if hasattr(src, "value") else src: -1, tgt.value if hasattr(tgt, "value") else tgt: 1})
+
+    # Reallocate from least-loaded to most-loaded
+    if len(snaps) >= 2:
+        hot = sorted(snaps, key=lambda s: _service_attr(s, "total_pending", "active_cases"), reverse=True)
+        cold = sorted(snaps, key=lambda s: _service_attr(s, "total_pending", "active_cases"))
+        hot_svc = _service_name(hot[0])
+        cold_svc = _service_name(cold[0])
+        hot_load = _service_attr(hot[0], "total_pending", "active_cases")
+        cold_load = _service_attr(cold[0], "total_pending", "active_cases")
+        if (
+            hot_svc and cold_svc and hot_svc != cold_svc
+            and hot_load - cold_load >= 3
+            and _alloc_for(obs, cold_svc) > 1
+        ):
+            return ActionModel(
+                action_type=ActionType.REALLOCATE_OFFICERS,
+                service_target=cold_svc,
+                reallocation_delta={cold_svc.value: -1, hot_svc.value: 1},
+            )
+
     return ActionModel(action_type=ActionType.ADVANCE_TIME)
 
 def random_policy(obs: ObservationModel) -> ActionModel:
@@ -83,15 +137,16 @@ def run_policy_episode(task_id: str, policy_name: str, seed: int | None = None, 
             break
     state = env.state()
     grade = grade_episode(state)
-    return {
-        "task_id":    task_id,
-        "policy":     policy_name,
-        "seed":       state.seed,
-        "reward_sum": round(reward_sum, 4),
-        "score":      grade.score,
-        "grader":     grade.grader_name,
-        "metrics":    grade.metrics,
-        "steps":      state.total_steps,
-        "completed":  state.total_completed,
-        "backlog":    state.total_backlog,
-    }
+    # Return a SimpleNamespace so attribute access (result.score) works in main.py
+    return SimpleNamespace(
+        task_id=task_id,
+        policy=policy_name,
+        seed=state.seed,
+        reward_sum=round(reward_sum, 4),
+        score=float(grade.score),
+        grader=grade.grader_name,
+        metrics=grade.metrics,
+        steps=int(state.total_steps),
+        completed=int(state.total_completed),
+        backlog=int(state.total_backlog),
+    )

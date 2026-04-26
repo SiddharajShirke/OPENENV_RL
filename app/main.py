@@ -2122,7 +2122,7 @@ def api_simulation_live_start(body: SimulationLiveStartRequest) -> SimulationLiv
         agent_mode=run.agent_mode,
         seed=run.seed,
         max_steps=run.max_steps,
-        start_log=run.start_line()["log"],
+        start_log=run.start_line(),
         route_plan=list(run.llm_route),
     )
 
