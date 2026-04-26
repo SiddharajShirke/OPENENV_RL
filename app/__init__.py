@@ -1,6 +1,10 @@
 # from app.env import GovWorkflowEnv
 from app.models import ActionModel, ObservationModel, RewardModel
-from client import GovWorkflowClient
+
+try:
+    from client import GovWorkflowClient
+except ModuleNotFoundError:
+    GovWorkflowClient = None  # type: ignore[assignment]
 
 GovWorkflowAction = ActionModel
 GovWorkflowObservation = ObservationModel

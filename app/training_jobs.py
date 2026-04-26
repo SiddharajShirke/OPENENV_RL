@@ -7,6 +7,7 @@ import subprocess
 import sys
 import threading
 import time
+import math
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -19,10 +20,18 @@ Status = Literal["queued", "running", "completed", "failed", "stopped"]
 
 _PROGRESS_RE = re.compile(r"(\d[\d,]*)/(\d[\d,]*)")
 _METRIC_ROW_RE = re.compile(r"\|\s*([a-zA-Z0-9_ ]+?)\s*\|\s*(-?\d+(?:\.\d+)?)\s*\|")
+_EVAL_PROGRESS_RE = re.compile(
+    r"Eval\s+num_timesteps=(\d+),\s*episode_reward=([-]?\d+(?:\.\d+)?)",
+    re.IGNORECASE,
+)
 _EVAL_ROW_RE = re.compile(
     r"^\[Eval\]\s+([a-z_]+)\s+score=([0-9.]+)\s+reward=([-0-9.]+)\s+completed=(\d+)\s+sla_breaches=(\d+)$"
 )
 _AVG_RE = re.compile(r"^\[Eval\]\s+Average grader score:\s+([0-9.]+)$")
+_BEST_GRADER_RE = re.compile(
+    r"\[Eval\]\s+New best(?: recurrent)? grader score:\s+([0-9.]+)",
+    re.IGNORECASE,
+)
 
 
 def _now() -> float:
@@ -83,6 +92,7 @@ class TrainingJob:
     output_model_path: str | None = None
     output_model_name: str | None = None
     latest_metrics: dict[str, float] = field(default_factory=dict)
+    metric_history: list[dict[str, Any]] = field(default_factory=list)
     evaluation_rows: list[dict[str, Any]] = field(default_factory=list)
     evaluation_avg_score: float | None = None
     logs_tail: list[str] = field(default_factory=list)
@@ -113,6 +123,7 @@ class TrainingJob:
                 "output_model_path": self.output_model_path,
                 "output_model_name": self.output_model_name,
                 "latest_metrics": dict(self.latest_metrics),
+                "metric_history": list(self.metric_history),
                 "evaluation_rows": list(self.evaluation_rows),
                 "evaluation_avg_score": self.evaluation_avg_score,
                 "logs_tail": list(self.logs_tail),
@@ -159,6 +170,7 @@ class TrainingJobManager:
                         output_model_path=snap.get("output_model_path"),
                         output_model_name=snap.get("output_model_name"),
                         latest_metrics=dict(snap.get("latest_metrics") or {}),
+                        metric_history=list(snap.get("metric_history") or []),
                         evaluation_rows=list(snap.get("evaluation_rows") or []),
                         evaluation_avg_score=(
                             float(snap["evaluation_avg_score"])
@@ -255,6 +267,7 @@ class TrainingJobManager:
 
         cmd = [
             sys.executable,
+            "-u",
             "-m",
             "rl.train_ppo",
             "--phase",
@@ -267,14 +280,27 @@ class TrainingJobManager:
             str(job_seed),
         ]
         if phase == 1:
-            cmd.extend(["--phase1-config", cfg])
+            # Keep Phase 1 UI responsive by emitting multiple eval checkpoints
+            # across the requested run length instead of only near the end.
+            phase1_eval_freq = max(128, int((timesteps / max(n_envs, 1)) / 15))
+            cmd.extend(
+                [
+                    "--phase1-config",
+                    cfg,
+                    "--phase1-eval-freq",
+                    str(phase1_eval_freq),
+                ]
+            )
         else:
             cmd.extend(["--phase2-config", cfg])
+
+        env = os.environ.copy()
+        env["PYTHONUNBUFFERED"] = "1"
 
         proc = subprocess.Popen(
             cmd,
             cwd=str(self._repo_root),
-            env=os.environ.copy(),
+            env=env,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
@@ -288,12 +314,49 @@ class TrainingJobManager:
             job.updated_at = _now()
             job.process_id = proc.pid
             job.process = proc
+            _tail_append(job.logs_tail, f"[training_jobs] started pid={proc.pid}")
+            _tail_append(job.logs_tail, f"[training_jobs] command: {' '.join(cmd)}")
         self._persist_job(job)
 
         t = threading.Thread(target=self._watch_job, args=(job,), daemon=True)
         t.start()
 
         return job.snapshot()
+
+    @staticmethod
+    def _append_metric_point_locked(
+        job: TrainingJob,
+        *,
+        timesteps: float | None,
+        reward: float | None = None,
+        score: float | None = None,
+        source: str | None = None,
+        max_points: int = 5000,
+    ) -> None:
+        """
+        Append (or merge) a structured metric point while holding job.lock.
+        """
+        if timesteps is None or not math.isfinite(float(timesteps)):
+            return
+
+        payload: dict[str, Any] = {"t": float(timesteps)}
+        if reward is not None and math.isfinite(float(reward)):
+            payload["ep_rew_mean"] = float(reward)
+        if score is not None and math.isfinite(float(score)):
+            payload["grader_score"] = float(score)
+        if source:
+            payload["source"] = str(source)
+
+        if "ep_rew_mean" not in payload and "grader_score" not in payload:
+            return
+
+        if job.metric_history and float(job.metric_history[-1].get("t", -1.0)) == float(payload["t"]):
+            job.metric_history[-1].update(payload)
+        else:
+            job.metric_history.append(payload)
+
+        if len(job.metric_history) > max_points:
+            del job.metric_history[: len(job.metric_history) - max_points]
 
     def stop_job(self, job_id: str) -> dict[str, Any] | None:
         with self._lock:
@@ -314,6 +377,38 @@ class TrainingJobManager:
         except Exception:
             pass
         return job.snapshot()
+
+    def delete_job(self, job_id: str, *, clear_artifacts: bool = False) -> bool:
+        with self._lock:
+            job = self._jobs.pop(job_id, None)
+        if job is None:
+            return False
+
+        with job.lock:
+            proc = job.process
+            status = job.status
+            output_model_path = job.output_model_path
+
+        if proc is not None and status in ("queued", "running"):
+            try:
+                proc.terminate()
+            except Exception:
+                pass
+
+        if self._persistence is not None and self._persistence.enabled:
+            self._persistence.delete_training_job(job_id)
+
+        if clear_artifacts and output_model_path:
+            try:
+                out = Path(output_model_path)
+                if out.exists() and out.is_file():
+                    out.unlink(missing_ok=True)
+                parent = out.parent
+                if parent.exists() and parent.is_dir() and not any(parent.iterdir()):
+                    parent.rmdir()
+            except Exception:
+                pass
+        return True
 
     def _watch_job(self, job: TrainingJob) -> None:
         proc = job.process
@@ -342,7 +437,14 @@ class TrainingJobManager:
                 job.progress = 1.0
             else:
                 job.status = "failed"
-                job.error_message = f"Training exited with code {return_code}."
+                base_error = f"Training exited with code {return_code}."
+                if not job.logs_tail:
+                    _tail_append(
+                        job.logs_tail,
+                        "[training_jobs] Process ended before producing logs. "
+                        "Check RL dependencies/environment and training command arguments.",
+                    )
+                job.error_message = base_error
             job.ended_at = _now()
             job.updated_at = _now()
             job.process = None
@@ -365,6 +467,21 @@ class TrainingJobManager:
                 if den > 0:
                     job.progress = max(0.0, min(1.0, num / den))
 
+            ep = _EVAL_PROGRESS_RE.search(line)
+            if ep:
+                ts = int(ep.group(1))
+                rew = float(ep.group(2))
+                job.latest_metrics["total_timesteps"] = float(ts)
+                job.latest_metrics["ep_rew_mean"] = rew
+                self._append_metric_point_locked(
+                    job,
+                    timesteps=float(ts),
+                    reward=rew,
+                    source="eval_progress",
+                )
+                if job.timesteps > 0:
+                    job.progress = max(0.0, min(1.0, ts / float(job.timesteps)))
+
             m = _METRIC_ROW_RE.search(line)
             if m:
                 key = _normalize_metric_key(m.group(1))
@@ -383,6 +500,61 @@ class TrainingJobManager:
                 }
                 if key in interesting:
                     job.latest_metrics[key] = val
+                    current_ts = job.latest_metrics.get("total_timesteps")
+                    if key == "total_timesteps":
+                        self._append_metric_point_locked(
+                            job,
+                            timesteps=val,
+                            reward=job.latest_metrics.get("ep_rew_mean"),
+                            score=job.latest_metrics.get("grader_score") or job.latest_metrics.get("avg_grader_score"),
+                            source="metrics_row_ts",
+                        )
+                    elif key in {"ep_rew_mean", "mean_reward"}:
+                        self._append_metric_point_locked(
+                            job,
+                            timesteps=float(current_ts) if current_ts is not None else None,
+                            reward=val,
+                            source="metrics_row_reward",
+                        )
+                    elif key in {"grader_score", "avg_grader_score"}:
+                        self._append_metric_point_locked(
+                            job,
+                            timesteps=float(current_ts) if current_ts is not None else None,
+                            score=val,
+                            source="metrics_row_score",
+                        )
+
+            best = _BEST_GRADER_RE.search(line)
+            if best:
+                score = float(best.group(1))
+                job.latest_metrics["grader_score"] = score
+                fallback_ts = (
+                    float(job.latest_metrics.get("total_timesteps"))
+                    if "total_timesteps" in job.latest_metrics
+                    else float(job.metric_history[-1]["t"]) if job.metric_history else 0.0
+                )
+                self._append_metric_point_locked(
+                    job,
+                    timesteps=fallback_ts if fallback_ts > 0 else float(len(job.metric_history) + 1),
+                    score=score,
+                    source="best_grader",
+                )
+
+            avg_line = _AVG_RE.match(line.strip())
+            if avg_line:
+                avg_score = float(avg_line.group(1))
+                job.latest_metrics["avg_grader_score"] = avg_score
+                fallback_ts = (
+                    float(job.latest_metrics.get("total_timesteps"))
+                    if "total_timesteps" in job.latest_metrics
+                    else float(job.metric_history[-1]["t"]) if job.metric_history else 0.0
+                )
+                self._append_metric_point_locked(
+                    job,
+                    timesteps=fallback_ts if fallback_ts > 0 else float(len(job.metric_history) + 1),
+                    score=avg_score,
+                    source="avg_grader",
+                )
             if job.updated_at - job.last_persist_at >= 1.5:
                 should_persist = True
         if should_persist:
@@ -438,6 +610,19 @@ class TrainingJobManager:
             with job.lock:
                 job.evaluation_rows = rows
                 job.evaluation_avg_score = avg
+                if avg is not None:
+                    job.latest_metrics["avg_grader_score"] = float(avg)
+                    fallback_ts = (
+                        float(job.latest_metrics.get("total_timesteps"))
+                        if "total_timesteps" in job.latest_metrics
+                        else float(job.timesteps)
+                    )
+                    self._append_metric_point_locked(
+                        job,
+                        timesteps=fallback_ts if fallback_ts > 0 else float(len(job.metric_history) + 1),
+                        score=float(avg),
+                        source="final_eval_avg",
+                    )
                 _tail_append(job.logs_tail, "----- EVALUATION -----")
                 for ln in (proc.stdout or "").splitlines():
                     _tail_append(job.logs_tail, ln)

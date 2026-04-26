@@ -21,7 +21,15 @@ from app.models import (
 )
 
 # ── Canonical orderings (must never change across the codebase) ──────────────
-SERVICES: List[ServiceType] = list(ServiceType)          # 7 services
+SERVICES: List[ServiceType] = [
+    ServiceType.PASSPORT,
+    ServiceType.DRIVING_LICENSE,
+    ServiceType.GST_REGISTRATION,
+    ServiceType.INCOME_CERTIFICATE,
+    ServiceType.CASTE_CERTIFICATE,
+    ServiceType.BIRTH_CERTIFICATE,
+    ServiceType.LAND_REGISTRATION,
+]  # 7 legacy RL services for checkpoint compatibility
 STAGES:   List[StageType]   = list(StageType)            # 5 stages
 PRIORITY_MODES: List[PriorityMode] = list(PriorityMode)  # 4 modes
 ACTION_TYPES:   List[ActionType]   = list(ActionType)    # 6 types

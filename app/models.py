@@ -20,6 +20,7 @@ import uuid
 class ServiceType(str, Enum):
     PASSPORT            = "passport"
     DRIVING_LICENSE     = "driving_license"
+    AADHAAR_CARD        = "aadhaar_card"
     GST_REGISTRATION    = "gst_registration"
     INCOME_CERTIFICATE  = "income_certificate"
     CASTE_CERTIFICATE   = "caste_certificate"

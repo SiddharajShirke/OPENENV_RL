@@ -146,6 +146,26 @@ DRIVING_LICENSE_PROFILE = SectorProfile(
     doc_enrichment_delay_days_max=1,
 )
 
+AADHAAR_CARD_PROFILE = SectorProfile(
+    service_type=ServiceType.AADHAAR_CARD,
+    sector_name="National Identity Sector - Aadhaar Card",
+    missing_docs_probability=0.22,
+    doc_defect_rate_digital=0.12,
+    doc_defect_rate_paper=0.30,
+    field_verification_probability=0.18,
+    manual_scrutiny_intensity=0.42,
+    decision_backlog_sensitivity=0.50,
+    system_dependency_risk=0.38,
+    sla_days=10,
+    urgency_profile=UrgencyProfile.HIGH,
+    base_processing_rate=13.0,
+    field_verification_days=2,
+    doc_enrichment_type=DocEnrichmentType.NONE,
+    doc_enrichment_probability=0.0,
+    doc_enrichment_delay_days_min=1,
+    doc_enrichment_delay_days_max=2,
+)
+
 SECTOR_REGISTRY: dict = {
     ServiceType.INCOME_CERTIFICATE: INCOME_CERTIFICATE_PROFILE,
     ServiceType.LAND_REGISTRATION:  LAND_REGISTRATION_PROFILE,
@@ -154,6 +174,7 @@ SECTOR_REGISTRY: dict = {
     ServiceType.PASSPORT:           PASSPORT_PROFILE,
     ServiceType.GST_REGISTRATION:   GST_REGISTRATION_PROFILE,
     ServiceType.DRIVING_LICENSE:    DRIVING_LICENSE_PROFILE,
+    ServiceType.AADHAAR_CARD:       AADHAAR_CARD_PROFILE,
 }
 
 def get_sector_profile(service_type: ServiceType) -> SectorProfile:

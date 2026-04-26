@@ -1,4 +1,4 @@
-# Environment secrets — NEVER commit .env
+# Environment secrets - NEVER commit .env
 .env
 .env.local
 .env.production
@@ -22,11 +22,26 @@ pip_bootstrap/
 
 # Runtime outputs
 outputs/
+logs/
+reports/
+data/
+results/training_runs/
+results/runs/
+results/eval_logs/
+results/best_model/archived/
+artifacts/
 
 # Frontend build cache/deps
 frontend/react/node_modules/
 frontend/react/.vite/
 frontend/react/.vite-temp/
+frontend/react/dist/
+.vite/
+.npm-cache/
+
+# Docker/local deployment overrides
+docker-compose.override.yml
+*.local.env
 
 # Local test artifacts
 test_results.txt
@@ -41,3 +56,4 @@ results/prevalidation_*.log
 
 # Keep benchmark Phase 1 model in Git for Colab/Kaggle transfer
 !results/best_model/phase1/phase1_final.zip
+

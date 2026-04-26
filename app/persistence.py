@@ -137,6 +137,14 @@ class PersistenceStore:
             conn.commit()
             return int(cur.rowcount or 0)
 
+    def delete_training_job(self, job_id: str) -> int:
+        if not self.enabled:
+            return 0
+        with self._lock, self._connect() as conn:
+            cur = conn.execute("DELETE FROM training_jobs WHERE job_id = ?", (str(job_id),))
+            conn.commit()
+            return int(cur.rowcount or 0)
+
     # Simulation runs -------------------------------------------------------
     def upsert_simulation_run(
         self,

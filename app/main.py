@@ -30,7 +30,6 @@ GET  /redoc                     ReDoc UI (FastAPI auto-generated)
 from __future__ import annotations
 
 from collections import OrderedDict
-import glob
 import json
 import math
 import os
@@ -58,6 +57,7 @@ from app.models import (
     EpisodeStateModel,
     GraderResult,
     ObservationModel,
+    ServiceType,
     StepInfoModel,
 )
 from app.persistence import PersistenceStore
@@ -65,6 +65,7 @@ from app.simulator import LiveSimulationSession, SimulationAgentMode, run_simula
 from app.tasks import TASKS, get_task, list_benchmark_tasks, list_tasks
 from app.training_jobs import TrainingJobManager
 from app.sector_profiles import get_sector_profile
+from app.story_router import router as story_router
 from rl.action_mask import ActionMaskComputer
 from rl.feature_builder import ACTION_DECODE_TABLE, N_ACTIONS
 
@@ -399,6 +400,64 @@ def _action_service_hint(action: ActionModel) -> str | None:
             if int(delta) < 0:
                 return key.value if hasattr(key, "value") else str(key)
     return None
+
+
+def _result_value(result: Any, key: str, default: Any = None) -> Any:
+    """Read from dict-like or attribute-like result payloads."""
+    if isinstance(result, dict):
+        return result.get(key, default)
+    return getattr(result, key, default)
+
+
+def _log_line_text(value: Any) -> str:
+    """Normalize live-simulation log payloads to plain text."""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        raw = value.get("log")
+        if isinstance(raw, str):
+            return raw
+        try:
+            return json.dumps(value, separators=(",", ":"))
+        except Exception:
+            return str(value)
+    if value is None:
+        return ""
+    return str(value)
+
+
+def _phase_model_dirs() -> list[Path]:
+    base = REPO_ROOT / "results" / "best_model"
+    return [
+        base / "phase1",
+        base / "phase2",
+    ]
+
+
+def _discover_phase12_zip_models() -> list[Path]:
+    discovered: list[Path] = []
+    for model_dir in _phase_model_dirs():
+        if not model_dir.exists():
+            continue
+        for file_path in sorted(model_dir.glob("*.zip")):
+            if file_path.is_file():
+                discovered.append(file_path.resolve())
+    unique = sorted({p for p in discovered if p.exists()})
+    return unique
+
+
+def _phase_from_model_path(path: Path) -> int:
+    parent = path.parent.name.lower()
+    if parent == "phase1":
+        return 1
+    if parent == "phase2":
+        return 2
+    name = path.name.lower()
+    if "phase1" in name:
+        return 1
+    if "phase2" in name:
+        return 2
+    return 0
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -833,6 +892,11 @@ class TrainingJobStopResponse(BaseModel):
     status: str
 
 
+class TrainingJobDeleteResponse(BaseModel):
+    deleted: bool
+    job_id: str
+
+
 class TrainingJobsListResponse(BaseModel):
     jobs: list[dict[str, Any]]
 
@@ -897,6 +961,10 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
+app.include_router(story_router)
+app.include_router(story_router, prefix="/api", include_in_schema=False)
+app.include_router(story_router, prefix="/api/v1", include_in_schema=False)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=server_settings.cors_origins,
@@ -942,7 +1010,15 @@ def ui_index() -> FileResponse:
             status_code=status.HTTP_404_NOT_FOUND,
             detail="UI bundle not found. Build frontend/react with Vite first.",
         )
-    return FileResponse(UI_INDEX_FILE)
+    return FileResponse(
+        UI_INDEX_FILE,
+        headers={
+            # Always revalidate HTML shell so users pick up the latest hashed bundle.
+            "Cache-Control": "no-store, no-cache, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        },
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1221,40 +1297,17 @@ def action_masks(body: ActionMaskRequest) -> ActionMaskResponse:
 
 @app.get("/rl/models", response_model=list[ModelInfo], tags=["RL"], summary="List discovered RL model checkpoints")
 def rl_models_v2() -> list[ModelInfo]:
-    search_dirs = [
-        REPO_ROOT / "results" / "best_model",
-        REPO_ROOT / "rl" / "models" / "phase1",
-        REPO_ROOT / "rl" / "models" / "phase2",
-        REPO_ROOT / "rl" / "models" / "phase3",
-    ]
-    discovered: list[Path] = []
-    for base_dir in search_dirs:
-        if not base_dir.exists():
-            continue
-        for found in glob.glob(str(base_dir / "**" / "*.zip"), recursive=True):
-            discovered.append(Path(found))
-
-    unique_paths = sorted({p.resolve() for p in discovered if p.exists()})
+    unique_paths = _discover_phase12_zip_models()
     if not unique_paths:
         return [ModelInfo(model_path="none", task_id="none", phase=0, size_mb=0.0, exists=False)]
 
     rows: list[ModelInfo] = []
     for path in unique_paths:
-        lowered = str(path).lower()
-        if "phase1" in lowered:
-            phase = 1
-        elif "phase2" in lowered:
-            phase = 2
-        elif "phase3" in lowered:
-            phase = 3
-        else:
-            phase = 0
+        phase = _phase_from_model_path(path)
 
         stem = path.stem.lower()
         if "medium" in stem:
             task_id = "mixed_urgency_medium"
-        elif "hard" in stem or "recurrent" in stem:
-            task_id = "cross_department_hard"
         else:
             task_id = "district_backlog_easy"
 
@@ -1480,15 +1533,7 @@ def simulate_trace(
 def actions_schema() -> dict[str, Any]:
     return {
         "total_action_types": 6,
-        "valid_services": [
-            "passport",
-            "driving_license",
-            "gst_registration",
-            "income_certificate",
-            "caste_certificate",
-            "birth_certificate",
-            "land_registration",
-        ],
+        "valid_services": [svc.value for svc in ServiceType],
         "valid_priority_modes": [
             "urgent_first",
             "oldest_first",
@@ -1629,6 +1674,16 @@ def api_state(body: StateRequest) -> StateResponse:
     return state_post(body)
 
 
+@api.post("/action-masks", response_model=ActionMaskResponse, summary="Action masks - frontend alias")
+def api_action_masks(body: ActionMaskRequest) -> ActionMaskResponse:
+    return action_masks(body)
+
+
+@api.get("/actions/schema", summary="Action schema - frontend alias")
+def api_actions_schema() -> dict[str, Any]:
+    return actions_schema()
+
+
 @api.post("/grade", response_model=GradeResponse, summary="Grade — frontend alias")
 def api_grade(body: GradeRequest) -> GradeResponse:
     return grade(body)
@@ -1672,11 +1727,11 @@ def api_benchmark(body: BenchmarkRequest) -> BenchmarkResponse:
             run_rows.append(BenchmarkAgentRun(
                 run_index=run_idx + 1,
                 seed=seed,
-                score=float(result["score"]),
-                reward_sum=float(result["reward_sum"]),
-                completed=int(result["completed"]),
-                backlog=int(result["backlog"]),
-                steps=int(result["steps"]),
+                score=float(_result_value(result, "score", 0.0)),
+                reward_sum=float(_result_value(result, "reward_sum", 0.0)),
+                completed=int(_result_value(result, "completed", 0)),
+                backlog=int(_result_value(result, "backlog", 0)),
+                steps=int(_result_value(result, "steps", 0)),
             ))
         scores = [r.score for r in run_rows]
         agent_results.append(BenchmarkAgentSummary(
@@ -1868,16 +1923,35 @@ def api_openenv_compliance(
 
 @api.get("/rl_models", response_model=RLModelsResponse, summary="List available trained RL model checkpoints")
 def api_rl_models() -> RLModelsResponse:
-    repo_root = REPO_ROOT
-    phase2   = repo_root / "results" / "best_model" / "phase2_final.zip"
-    phase3   = repo_root / "results" / "best_model" / "phase3_final.zip"
-    best     = repo_root / "results" / "best_model" / "best_model.zip"
-    return RLModelsResponse(models=[
-        RLModelInfo(label="Phase 2 Final — Maskable PPO", path=str(phase2), exists=phase2.exists(), model_type="maskable"),
-        RLModelInfo(label="Best Model — Maskable PPO",    path=str(best),   exists=best.exists(),   model_type="maskable"),
-        RLModelInfo(label="Phase 3 Final — Recurrent PPO",path=str(phase3), exists=phase3.exists(), model_type="recurrent"),
-    ])
+    models: list[RLModelInfo] = []
+    for path in _discover_phase12_zip_models():
+        phase = _phase_from_model_path(path)
+        model_type: Literal["maskable", "recurrent"] = (
+            "recurrent" if "recurrent" in path.name.lower() else "maskable"
+        )
+        label = f"Phase {phase} - {path.stem.replace('_', ' ')}"
+        models.append(
+            RLModelInfo(
+                label=label,
+                path=str(path),
+                exists=True,
+                model_type=model_type,
+            )
+        )
+    return RLModelsResponse(models=models)
 
+
+@api.get(
+    "/rl/models",
+    response_model=list[ModelInfo],
+    summary="List discovered RL model checkpoints (V2 slash alias)",
+)
+def api_rl_models_v2() -> list[ModelInfo]:
+    """
+    Slash-path alias for frontend clients that call `/api/rl/models`.
+    Returns the same V2 payload shape as root `/rl/models`.
+    """
+    return rl_models_v2()
 
 @api.post("/rl_run", response_model=RLRunResponse, summary="Run one episode with a trained RL checkpoint")
 def api_rl_run(body: RLRunRequest) -> RLRunResponse:
@@ -2122,7 +2196,7 @@ def api_simulation_live_start(body: SimulationLiveStartRequest) -> SimulationLiv
         agent_mode=run.agent_mode,
         seed=run.seed,
         max_steps=run.max_steps,
-        start_log=run.start_line(),
+        start_log=_log_line_text(run.start_line()),
         route_plan=list(run.llm_route),
     )
 
@@ -2156,7 +2230,7 @@ def api_simulation_live_step(body: SimulationLiveStepRequest) -> SimulationLiveS
             score=run.score,
             grader_name=run.grader_name,
             summary=run.summary,
-            end_log=run.end_line(),
+            end_log=_log_line_text(run.end_line()),
         )
     try:
         row, step_log, done = run.step_once()
@@ -2189,8 +2263,8 @@ def api_simulation_live_step(body: SimulationLiveStepRequest) -> SimulationLiveS
         run_id=body.run_id,
         done=done,
         step=SimulationStep(**row),
-        step_log=step_log,
-        end_log=run.end_line() if done else None,
+        step_log=_log_line_text(step_log) if step_log is not None else None,
+        end_log=_log_line_text(run.end_line()) if done else None,
         total_reward=float(run.total_reward),
         score=run.score,
         grader_name=run.grader_name,
@@ -2289,6 +2363,14 @@ def api_training_stop(job_id: str) -> TrainingJobStopResponse:
     if job is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Training job '{job_id}' not found.")
     return TrainingJobStopResponse(stopped=True, job_id=job_id, status=str(job.get("status", "unknown")))
+
+
+@api.delete("/training_jobs/{job_id}", response_model=TrainingJobDeleteResponse, summary="Delete one training job from history")
+def api_training_job_delete(job_id: str, clear_artifacts: bool = Query(default=False)) -> TrainingJobDeleteResponse:
+    deleted = training_jobs.delete_job(job_id, clear_artifacts=clear_artifacts)
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Training job '{job_id}' not found.")
+    return TrainingJobDeleteResponse(deleted=True, job_id=job_id)
 
 
 @api.delete("/training_jobs", response_model=HistoryClearResponse, summary="Clear persisted training job history")
@@ -2523,6 +2605,31 @@ if enable_structured_v1_api:
         source_prefix=structured_source_prefix,
         target_prefix=structured_target_prefix,
     )
+
+
+def _route_exists(application: FastAPI, path: str, method: str) -> bool:
+    needle = method.upper()
+    for route in application.routes:
+        if not isinstance(route, APIRoute):
+            continue
+        if route.path != path:
+            continue
+        if needle in (route.methods or set()):
+            return True
+    return False
+
+
+for _v1_alias, _endpoint, _method, _model in [
+    ("/api/v1/agents", api_agents, "GET", list[str]),
+    ("/api/v1/rl_models", api_rl_models, "GET", RLModelsResponse),
+    ("/api/v1/rl/models", api_rl_models_v2, "GET", list[ModelInfo]),
+]:
+    if _route_exists(app, _v1_alias, _method):
+        continue
+    if _method == "GET":
+        app.get(_v1_alias, response_model=_model, include_in_schema=False)(_endpoint)
+    else:
+        app.post(_v1_alias, response_model=_model, include_in_schema=False)(_endpoint)
 
 # OpenEnv-native routes under /openenv so both contracts are visible
 # in a single Swagger UI without colliding with existing root endpoints.

@@ -107,6 +107,15 @@ def backlog_clearance_policy(obs: ObservationModel) -> ActionModel:
 
     return ActionModel(action_type=ActionType.ADVANCE_TIME)
 
+
+def greedy_sla_policy(obs: ObservationModel) -> ActionModel:
+    """SLA-focused fallback policy used by historical aliases."""
+    target = _service_with_max(obs, "urgent_pending", "urgent_cases", "breached_cases")
+    if target:
+        return ActionModel(action_type=ActionType.REQUEST_MISSING_DOCUMENTS, service_target=target)
+    return backlog_clearance_policy(obs)
+
+
 def random_policy(obs: ObservationModel) -> ActionModel:
     import random
     return ActionModel(action_type=ActionType.ADVANCE_TIME)

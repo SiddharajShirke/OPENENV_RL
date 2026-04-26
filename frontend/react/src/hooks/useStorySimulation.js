@@ -1,67 +1,74 @@
-import { useState, useRef, useCallback } from "react";
-import { api, fmt } from "../api/client";
+import { useState, useRef, useCallback, useEffect } from "react";
+import { api } from "../api/client";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Narrative translator: maps raw action → human-readable cause→effect story
 // ─────────────────────────────────────────────────────────────────────────────
-function mapActionToStory(actionType, payload, reward, backlogDelta, slaDelta) {
-  let title = "System Advanced Time";
-  let desc = "Simulation progressed standard queue processing.";
-  let reason = "Agents continued with standard assignments to let active services burn down queues.";
+function mapActionToStory(actionType, payload, reward, backlogDelta, slaDelta, fairnessDelta) {
+  let title = "Standard Processing Cycle";
+  let desc = "The system advanced one cycle and continued normal queue processing.";
+  let reason = "No override was required, so routine processing continued.";
   let icon = "schedule";
   let type = reward > 0 ? "success" : "info";
 
-  const effectClause =
-    backlogDelta < 0
-      ? `→ backlog reduced by ${Math.abs(backlogDelta)}.`
-      : slaDelta > 0
-      ? `→ ${slaDelta} cases hit critical SLA breach.`
-      : "→ workload stabilized.";
+  const changes = [];
+  if (backlogDelta < 0) changes.push(`backlog improved by ${Math.abs(backlogDelta)} case(s)`);
+  else if (backlogDelta > 0) changes.push(`backlog increased by ${backlogDelta} case(s)`);
+  else changes.push("backlog stayed stable");
 
+  if (slaDelta > 0) changes.push(`${slaDelta} new SLA breach(es) occurred`);
+  else if (slaDelta < 0) changes.push(`${Math.abs(slaDelta)} SLA breach(es) recovered`);
+
+  if (Number.isFinite(Number(fairnessDelta)) && Number(fairnessDelta) !== 0) {
+    const v = Number(fairnessDelta);
+    changes.push(`fairness gap ${v > 0 ? "worsened" : "improved"} by ${Math.abs(v).toFixed(3)}`);
+  }
+
+  const effectClause = `${changes.join(", ")}.`;
   if (slaDelta > 0) type = "error";
 
   switch (actionType) {
     case "assign_capacity":
-      title = "Resources Allocated";
-      desc = `Assigned ${payload.capacity_assignment ?? payload.officer_delta ?? 1} officers to '${payload.service_target ?? payload.service ?? "queue"}'. ${effectClause}`;
-      reason = "Detected capacity shortage and dynamically routed officers to prevent processing delays.";
+      title = "Capacity Assigned";
+      desc = `Officers were assigned to '${payload.service_target ?? payload.service ?? "target queue"}'; ${effectClause}`;
+      reason = "The agent detected staffing pressure and increased capacity where it could reduce delay.";
       icon = "group_add";
       break;
     case "reallocate_officers":
-      title = "Staff Redeployed";
-      desc = `Shifted ${Math.abs(payload.reallocation_delta ?? payload.officer_delta ?? 1)} officers to prioritize critical backlog. ${effectClause}`;
-      reason = `Rebalanced resources to specifically target overloaded '${payload.service_target ?? "high-risk"}' queues avoiding imminent breaches.`;
+      title = "Staff Reallocated";
+      desc = `Officers were reallocated toward higher-pressure services; ${effectClause}`;
+      reason = `The agent shifted staffing to reduce bottlenecks in '${payload.service_target ?? "priority"}' services.`;
       icon = "compare_arrows";
       break;
     case "request_missing_documents":
-      title = "Bottleneck Cleared";
-      desc = `Requested missing documentation for blocked cases. ${effectClause}`;
-      reason = "Identified process starvation due to missing constraints, clearing them proactively.";
+      title = "Documents Requested";
+      desc = `Missing documents were requested to unblock pending files; ${effectClause}`;
+      reason = "The agent prioritized document blockers to avoid queue stagnation.";
       icon = "rule_folder";
       type = type !== "error" ? "success" : type;
       break;
     case "escalate_service":
-      title = "Priority Override Applied";
-      desc = `Used emergency escalation to fast-track at-risk cases. ${effectClause}`;
-      reason = "Urgency threshold exceeded; applying forced escalation to preserve SLAs.";
+      title = "Service Escalated";
+      desc = `At-risk services were escalated for faster handling; ${effectClause}`;
+      reason = "Escalation was used to protect SLA-critical cases.";
       icon = "warning";
       type = "warning";
       break;
     case "set_priority_mode":
-      title = "Queue Strategy Updated";
-      desc = `System automatically shifted to '${payload.priority_mode}' strategy to resolve load imbalances.`;
-      reason = "Global policy adjustment to counteract widespread performance degradation.";
+      title = "Priority Mode Updated";
+      desc = `Priority mode switched to '${payload.priority_mode ?? "balanced"}'; ${effectClause}`;
+      reason = "The agent changed queue strategy to better match current workload pressure.";
       icon = "model_training";
       break;
     default:
+      desc = `Routine processing executed; ${effectClause}`;
       break;
   }
 
   if (reward < 0 && type === "info") type = "warning";
 
   const isHighReward = reward >= 1.0;
-  const isHugeImpact = backlogDelta <= -5; // Huge backlog drop (negative delta is good)
-
+  const isHugeImpact = backlogDelta <= -5;
   return { title, desc, reason, icon, type, isHighReward, isHugeImpact };
 }
 
@@ -88,6 +95,13 @@ function isKeyDecision(s, backlogDelta) {
 export function useStorySimulation({ defaultTask }) {
   const [taskId, setTaskId] = useState(defaultTask || "district_backlog_easy");
   const [maxSteps, setMaxSteps] = useState(40);
+  const [agentMode, setAgentMode] = useState("trained_rl");
+  const [policyName, setPolicyName] = useState("backlog_clearance");
+  const [modelPath, setModelPath] = useState("");
+  const [modelType, setModelType] = useState("maskable");
+  const [availablePolicies, setAvailablePolicies] = useState([]);
+  const [availableModels, setAvailableModels] = useState([]);
+  const [configError, setConfigError] = useState("");
   const [running, setRunning] = useState(false);
   const [starting, setStarting] = useState(false);
   const [runId, setRunId] = useState("");
@@ -113,8 +127,64 @@ export function useStorySimulation({ defaultTask }) {
   const stepCount = useRef(0);
   const maxStepsRef = useRef(40);
 
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const [policiesRes, modelsV1Res, modelsV2Res] = await Promise.allSettled([
+          api("/agents"),
+          api("/rl_models"),
+          api("/rl/models"),
+        ]);
+        if (!mounted) return;
+
+        const policyRows = policiesRes.status === "fulfilled" && Array.isArray(policiesRes.value) ? policiesRes.value : [];
+        setAvailablePolicies(policyRows);
+        if (policyRows.length > 0 && !policyRows.includes(policyName)) {
+          setPolicyName(policyRows[0]);
+        }
+
+        const modelRowsV1 = modelsV1Res.status === "fulfilled" && Array.isArray(modelsV1Res.value?.models)
+          ? modelsV1Res.value.models
+          : [];
+        const modelRowsV2 = modelsV2Res.status === "fulfilled" && Array.isArray(modelsV2Res.value)
+          ? modelsV2Res.value.map((row) => ({
+            label: row?.model_path ? String(row.model_path).split(/[\\/]/).pop() : "model",
+            path: row?.model_path ? (String(row.model_path).toLowerCase().endsWith(".zip") ? row.model_path : `${row.model_path}.zip`) : "",
+            exists: Boolean(row?.exists),
+            model_type: "maskable",
+          }))
+          : [];
+
+        const dedupe = new Map();
+        for (const m of [...modelRowsV1, ...modelRowsV2]) {
+          const key = String(m?.path || "").replace(/\\/g, "/").toLowerCase();
+          if (!key || dedupe.has(key)) continue;
+          dedupe.set(key, m);
+        }
+        const existingModels = Array.from(dedupe.values()).filter((m) => Boolean(m?.exists));
+        setAvailableModels(existingModels);
+        const preferred =
+          existingModels.find((m) => String(m.path || "").toLowerCase().includes("phase2_final")) ||
+          existingModels[0];
+        if (preferred?.path) {
+          setModelPath(preferred.path);
+          setModelType(preferred.model_type || "maskable");
+          setAgentMode((prev) => (prev === "baseline_policy" ? "trained_rl" : prev));
+        }
+      } catch (err) {
+        if (!mounted) return;
+        setConfigError(err?.message || "Failed to load simulation options.");
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   const startSimulation = async () => {
     setStarting(true);
+    setConfigError("");
     setJourneyStats(null);
     setCurrentStep(0);
     initialSnapshot.current = null;
@@ -123,9 +193,11 @@ export function useStorySimulation({ defaultTask }) {
     try {
       const payload = {
         task_id: taskId,
-        agent_mode: "baseline_policy",
+        agent_mode: agentMode,
         max_steps: maxSteps,
-        policy_name: "backlog_clearance",
+        policy_name: policyName,
+        model_path: modelPath || null,
+        model_type: modelType,
       };
 
       const started = await api("/simulation/live/start", {
@@ -138,7 +210,7 @@ export function useStorySimulation({ defaultTask }) {
         id: "start",
         time: "Step 0",
         title: "Simulation Initialized",
-        desc: `Scenario locked: ${taskId.replace(/_/g, " ")}. Baseline policy engaged — agent begins resolving backlog.`,
+        desc: `Scenario locked: ${taskId.replace(/_/g, " ")}. Agent mode '${agentMode}' engaged — agent begins resolving backlog.`,
         impact: 0,
         type: "info",
         icon: "rocket_launch",
@@ -161,6 +233,7 @@ export function useStorySimulation({ defaultTask }) {
         phase: "early",
         key: false,
       }]);
+      setConfigError(err?.message || "Cannot start simulation.");
     } finally {
       setStarting(false);
     }
@@ -231,18 +304,29 @@ export function useStorySimulation({ defaultTask }) {
           payload,
           Number(s.reward),
           backlogDelta,
-          slaDelta
+          slaDelta,
+          fairnessDelta
         );
 
         const phase = getPhase(stepNum, maxStepsRef.current);
         const key = isKeyDecision(s, backlogDelta);
+        const improvesBacklog = backlogDelta < 0;
+        const worsensBacklog = backlogDelta > 0;
+        const worsensSla = slaDelta > 0;
+        const improvesSla = slaDelta < 0;
+        const outcomeLabel = improvesBacklog || improvesSla
+          ? "Improvement"
+          : worsensBacklog || worsensSla
+            ? "Degradation"
+            : "Stable";
+        const outcomeType = outcomeLabel === "Improvement" ? "success" : outcomeLabel === "Degradation" ? "warning" : "info";
 
         const newEvent = {
           id: `step-${stepNum}`,
           time: `Step ${stepNum}`,
           title: s.invalid_action ? "Action Blocked" : story.title,
           desc: s.invalid_action
-            ? `Technical constraints prevented this action. The agent will adapt. ${story.desc.includes("→") ? story.desc.split("→")[1]?.trim() ?? "" : ""}`
+            ? "This action was blocked by environment constraints; the agent adapts on the next step."
             : story.desc,
           reason: s.invalid_action ? "The attempted operation violated environment constraints (e.g. over-assignment)." : story.reason,
           impact: Number(s.reward),
@@ -252,6 +336,8 @@ export function useStorySimulation({ defaultTask }) {
           isHugeImpact: story.isHugeImpact && !s.invalid_action,
           phase,
           key,
+          outcomeLabel,
+          outcomeType,
           backlogDelta, // Used for phase summary
         };
 
@@ -348,26 +434,33 @@ export function useStorySimulation({ defaultTask }) {
 
   // Start/stop the polling loop reactively
   const cancelRef = useRef({ v: false });
-  const prevRunning = useRef(false);
-
-  if (running && !prevRunning.current) {
-    prevRunning.current = true;
+  useEffect(() => {
+    if (!running || !runId) {
+      cancelRef.current.v = true;
+      return undefined;
+    }
     cancelRef.current = { v: false };
-    // Kick off after a tiny delay so runId is set
-    setTimeout(() => {
+    const boot = setTimeout(() => {
       if (!cancelRef.current.v) {
         runLoop(runId, cancelRef.current);
       }
     }, 100);
-  }
-  if (!running && prevRunning.current) {
-    prevRunning.current = false;
-    cancelRef.current.v = true;
-  }
+    return () => {
+      clearTimeout(boot);
+      cancelRef.current.v = true;
+    };
+  }, [running, runId, runLoop]);
 
   return {
     taskId, setTaskId,
     maxSteps, setMaxSteps,
+    agentMode, setAgentMode,
+    policyName, setPolicyName,
+    modelPath, setModelPath,
+    modelType, setModelType,
+    availablePolicies,
+    availableModels,
+    configError,
     running, starting,
     currentStep,
     kpis, timeline, resources,
@@ -375,3 +468,7 @@ export function useStorySimulation({ defaultTask }) {
     startSimulation, stopSimulation,
   };
 }
+
+
+
+

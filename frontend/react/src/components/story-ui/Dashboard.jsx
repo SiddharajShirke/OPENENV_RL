@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { api, fmt } from "../../api/client";
 import { useStorySimulation } from "../../hooks/useStorySimulation";
+import { TrainingTabV2 } from "./TrainingTabV2";
 
-// ─── Timeline Tab ─────────────────────────────────────────────────────────────
+// --- Timeline Tab -------------------------------------------------------------
 const PHASE_LABELS = {
   early: { label: "Early Phase", color: "indigo", icon: "flag", desc: "Agent explores the environment and initial decisions are made." },
   middle: { label: "Mid-Phase", color: "amber", icon: "timeline", desc: "Policy adapts as patterns emerge in the backlog." },
@@ -12,12 +13,20 @@ const PHASE_LABELS = {
 function TimelineTab({ tasks }) {
   const {
     taskId, setTaskId, maxSteps, setMaxSteps,
+    agentMode,
+    policyName, setPolicyName,
+    modelPath, setModelPath,
+    modelType, setModelType,
+    availablePolicies,
+    availableModels,
+    configError,
     running, starting, currentStep,
     kpis, timeline, resources, journeyStats,
     startSimulation, stopSimulation,
   } = useStorySimulation({ defaultTask: tasks[0] || "district_backlog_easy" });
 
   const isIdle = !starting && !running;
+  const startBlocked = agentMode === "trained_rl" && !modelPath;
   const progressPct = maxSteps > 0 ? Math.min(100, Math.round((currentStep / maxSteps) * 100)) : 0;
   const fmt2 = (n) => new Intl.NumberFormat().format(n ?? 0);
   const fmtDelta = (n) => { const v = Number(n ?? 0); return v > 0 ? `+${v.toFixed(1)}` : v.toFixed(1); };
@@ -72,7 +81,7 @@ function TimelineTab({ tasks }) {
 
   return (
     <div className="space-y-5">
-      {/* ── Controls bar ── */}
+      {/* --- Controls bar --- */}
       <div className="flex flex-wrap gap-3 items-center justify-between bg-slate-900/60 border border-white/5 rounded-xl px-5 py-3">
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex items-center gap-2">
@@ -85,7 +94,7 @@ function TimelineTab({ tasks }) {
             >
               {tasks.length > 0
                 ? tasks.map((t) => <option key={t} value={t} className="bg-slate-900">{t.replace(/_/g, " ").toUpperCase()}</option>)
-                : <option>Loading…</option>}
+                : <option>Loading...</option>}
             </select>
           </div>
           <div className="flex items-center gap-2">
@@ -110,21 +119,84 @@ function TimelineTab({ tasks }) {
               className="w-20 bg-slate-800 border border-white/10 text-sm font-medium px-3 py-1.5 rounded-lg text-indigo-300 focus:outline-none focus:border-indigo-500 text-center"
             />
           </div>
+          {agentMode === "baseline_policy" && (
+            <div className="flex items-center gap-2">
+              <span className="text-slate-400 text-sm font-medium">Policy</span>
+              <select
+                value={policyName}
+                onChange={(e) => setPolicyName(e.target.value)}
+                disabled={!isIdle}
+                className="appearance-none bg-slate-800 border border-white/10 text-sm font-medium px-3 py-1.5 rounded-lg text-indigo-300 focus:outline-none focus:border-indigo-500 cursor-pointer"
+              >
+                {(availablePolicies.length > 0 ? availablePolicies : ["backlog_clearance"]).map((p) => (
+                  <option key={p} value={p} className="bg-slate-900">{String(p).replace(/_/g, " ")}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          {agentMode === "trained_rl" && (
+            <>
+              <div className="flex items-center gap-2">
+                <span className="text-slate-400 text-sm font-medium">Model</span>
+                <select
+                  value={modelPath}
+                  onChange={(e) => {
+                    const selected = availableModels.find((m) => m.path === e.target.value);
+                    setModelPath(e.target.value);
+                    if (selected?.model_type) setModelType(selected.model_type);
+                  }}
+                  disabled={!isIdle}
+                  className="max-w-[260px] appearance-none bg-slate-800 border border-white/10 text-sm font-medium px-3 py-1.5 rounded-lg text-indigo-300 focus:outline-none focus:border-indigo-500 cursor-pointer"
+                >
+                  {(availableModels.length > 0
+                    ? availableModels
+                    : [{ label: "No model found", path: "", model_type: "maskable" }]
+                  ).map((m) => (
+                    <option key={`${m.path}-${m.model_type}`} value={m.path} className="bg-slate-900">
+                      {m.label || m.path || "Unknown model"}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-slate-400 text-sm font-medium">Type</span>
+                <select
+                  value={modelType}
+                  onChange={(e) => setModelType(e.target.value)}
+                  disabled={!isIdle}
+                  className="appearance-none bg-slate-800 border border-white/10 text-sm font-medium px-3 py-1.5 rounded-lg text-indigo-300 focus:outline-none focus:border-indigo-500 cursor-pointer"
+                >
+                  <option value="maskable" className="bg-slate-900">Maskable PPO</option>
+                  <option value="recurrent" className="bg-slate-900">Recurrent PPO</option>
+                </select>
+              </div>
+            </>
+          )}
         </div>
         <button
           onClick={running ? stopSimulation : startSimulation}
-          disabled={starting}
+          disabled={starting || (!running && startBlocked)}
           className={`text-white text-sm font-bold px-6 py-2 rounded-lg transition-all duration-300 ${
             running
               ? "bg-rose-500/80 hover:bg-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.4)]"
               : "bg-gradient-to-r from-violet-600 to-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.4)] hover:shadow-[0_0_25px_rgba(99,102,241,0.7)]"
           }`}
         >
-          {starting ? "Initializing…" : running ? "⏹ Stop Simulation" : "▶ Start Auto-Resolution"}
+          {starting ? "Initializing..." : running ? "Stop Simulation" : "Start Auto-Resolution"}
         </button>
       </div>
+      {configError && (
+        <div className="bg-rose-500/10 border border-rose-500/30 rounded-xl px-4 py-3 text-xs font-semibold text-rose-300">
+          {configError}
+        </div>
+      )}
+      {startBlocked && !configError && (
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-3 text-xs font-semibold text-amber-300">
+          Select an available RL model checkpoint before starting `trained_rl` mode.
+        </div>
+      )}
 
-      {/* ── Progress bar (only visible while running) ── */}
+      {/* --- Progress bar (only visible while running) --- */}
       {(running || currentStep > 0) && (
         <div className="bg-slate-900/60 border border-white/5 rounded-xl px-5 py-3">
           <div className="flex justify-between items-center mb-2">
@@ -132,7 +204,7 @@ function TimelineTab({ tasks }) {
               {running ? "Simulation In Progress" : journeyStats ? "Episode Complete" : "Stopped"}
             </span>
             <span className="text-xs font-black text-white">
-              Step {currentStep} / {maxSteps} — {progressPct}%
+              Step {currentStep} / {maxSteps} - {progressPct}%
             </span>
           </div>
           <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
@@ -148,18 +220,18 @@ function TimelineTab({ tasks }) {
               <div className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
               <div className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
               <div className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
-              <span className="text-xs text-slate-500 ml-1">Agent is making decisions…</span>
+              <span className="text-xs text-slate-500 ml-1">Agent is making decisions...</span>
             </div>
           )}
         </div>
       )}
 
-      {/* ── Journey Summary (Before → After) — appears after episode completes ── */}
+      {/* --- Journey Summary (Before -> After) - appears after episode completes --- */}
       {journeyStats && (
         <div className="bg-gradient-to-br from-slate-900 to-indigo-950/30 border border-indigo-500/20 rounded-xl p-5 shadow-[0_0_30px_rgba(99,102,241,0.08)]">
           <div className="flex items-center gap-2 mb-4">
             <span className="material-symbols-outlined text-indigo-400">auto_graph</span>
-            <h3 className="text-base font-black text-white">Journey Summary — Start → End Transformation</h3>
+            <h3 className="text-base font-black text-white">Journey Summary - Start to End Transformation</h3>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {[
@@ -196,7 +268,32 @@ function TimelineTab({ tasks }) {
               },
             ].map((stat) => {
               const delta = stat.singleValue ? null : stat.isBaselineCmp ? (journeyStats.finalScore * 100) : stat.after - stat.before;
-              const improved = delta !== null && (stat.goodWhenDown ? delta <= 0 : delta >= 0);
+              const trend =
+                delta === null
+                  ? "none"
+                  : delta === 0
+                    ? "stable"
+                    : stat.goodWhenDown
+                      ? (delta < 0 ? "improving" : "worsening")
+                      : (delta > 0 ? "improving" : "worsening");
+              const direction =
+                delta === null || delta === 0
+                  ? "stable"
+                  : stat.goodWhenDown
+                    ? (delta < 0 ? "down" : "up")
+                    : (delta > 0 ? "up" : "down");
+              const directionIcon =
+                direction === "up"
+                  ? "north"
+                  : direction === "down"
+                    ? "south"
+                    : "horizontal_rule";
+              const trendClass =
+                trend === "improving"
+                  ? "text-emerald-400"
+                  : trend === "worsening"
+                    ? "text-rose-400"
+                    : "text-slate-300";
               return (
                 <div key={stat.label} className="bg-slate-800/60 border border-white/5 rounded-lg p-3">
                   <div className="text-xs font-semibold text-slate-400 mb-2 tracking-wide">{stat.label}</div>
@@ -208,14 +305,15 @@ function TimelineTab({ tasks }) {
                         {stat.isBaselineCmp ? "Baseline" : stat.before}{stat.suffix}
                       </span>
                       <span className="material-symbols-outlined text-slate-600 text-base">arrow_forward</span>
-                      <span className={`text-xl font-black ${improved ? "text-emerald-400" : "text-rose-400"}`}>
+                      <span className={`text-xl font-black ${trendClass}`}>
                         {stat.after}{stat.suffix}
                       </span>
                     </div>
                   )}
                   {delta !== null && (
-                    <div className={`text-xs font-bold mt-1 ${improved ? "text-emerald-400" : "text-rose-400"}`}>
-                      {improved ? "↓" : "↑"} {Math.abs(delta)} {stat.goodWhenDown && improved ? "improvement" : ""}
+                    <div className={`text-xs font-bold mt-1 ${trendClass} inline-flex items-center gap-1`}>
+                      <span className="material-symbols-outlined text-[14px] leading-none">{directionIcon}</span>
+                      <span>{Number(Math.abs(delta).toFixed(2))} {trend === "stable" ? "no change" : trend}</span>
                     </div>
                   )}
                   {stat.label === "Backlog Change" && journeyStats.backlogImprovement !== 0 && (
@@ -230,14 +328,22 @@ function TimelineTab({ tasks }) {
         </div>
       )}
 
-      {/* ── KPI Row ── */}
+      {/* --- KPI Row --- */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {[
           { label: "Total Backlog", value: fmt2(kpis.backlog), delta: kpis.backlogDelta, accent: "rose", icon: "inbox" },
           { label: "SLA Breaches", value: fmt2(kpis.slaBreaches), delta: kpis.slaDelta, accent: "amber", icon: "timer_off" },
           { label: "Fairness Gap", value: `${(Number(kpis.fairness) * 100).toFixed(1)}%`, delta: kpis.fairnessDelta, accent: "emerald", icon: "balance" },
         ].map((kpi) => {
-          const isGood = Number(kpi.delta) <= 0;
+          const delta = Number(kpi.delta ?? 0);
+          const trend = delta < 0 ? "down" : delta > 0 ? "up" : "stable";
+          const trendIcon = trend === "up" ? "north" : trend === "down" ? "south" : "horizontal_rule";
+          const badgeClass =
+            trend === "down"
+              ? "bg-emerald-500/20 text-emerald-400"
+              : trend === "up"
+                ? "bg-rose-500/20 text-rose-400"
+                : "bg-slate-500/20 text-slate-300";
           return (
             <div key={kpi.label} className="bg-slate-900/70 border border-white/5 backdrop-blur-md p-5 rounded-xl relative overflow-hidden group hover:border-white/10 transition-colors">
               <div className={`absolute -right-3 -top-3 w-20 h-20 bg-${kpi.accent}-500/10 rounded-full blur-2xl`} />
@@ -246,20 +352,21 @@ function TimelineTab({ tasks }) {
                   <span className={`material-symbols-outlined text-${kpi.accent}-400 text-base`}>{kpi.icon}</span>
                   <span className="text-xs font-semibold tracking-widest text-slate-400 uppercase">{kpi.label}</span>
                 </div>
-                <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${isGood ? "bg-emerald-500/20 text-emerald-400" : "bg-rose-500/20 text-rose-400"}`}>
-                  {isGood ? "↓" : "↑"} {fmtDelta(kpi.delta)}
+                <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${badgeClass} inline-flex items-center gap-1`}>
+                  <span className="material-symbols-outlined text-[14px] leading-none">{trendIcon}</span>
+                  <span>{fmtDelta(delta)}</span>
                 </span>
               </div>
               <div className="text-4xl font-black text-white">{kpi.value}</div>
               <div className="text-xs text-slate-500 mt-1">
-                {isGood && Number(kpi.delta) !== 0 ? "↘ Trend improving" : Number(kpi.delta) === 0 ? "→ Stable" : "↗ Trend worsening"}
+                {trend === "down" ? "Trend improving" : trend === "stable" ? "Stable" : "Trend worsening"}
               </div>
             </div>
           );
         })}
       </div>
 
-      {/* ── Story Timeline + Queue Monitors ── */}
+      {/* --- Story Timeline + Queue Monitors --- */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         {/* Story Timeline */}
         <div className="lg:col-span-7 bg-slate-900/70 border border-white/5 backdrop-blur-md rounded-xl p-6 min-h-[420px]">
@@ -291,7 +398,7 @@ function TimelineTab({ tasks }) {
                       </div>
                       <div className={`ml-2 text-xs font-black text-${ph.color}-400 tracking-widest uppercase border-b border-${ph.color}-500/20 pb-1 flex-1`}>
                         {ph.label}
-                        <span className="font-normal text-slate-500 normal-case tracking-normal ml-2">— {ph.desc}</span>
+                        <span className="font-normal text-slate-500 normal-case tracking-normal ml-2">- {ph.desc}</span>
                       </div>
                     </div>
                   );
@@ -307,7 +414,7 @@ function TimelineTab({ tasks }) {
                         <div>
                           <span className="text-[10px] text-slate-500 uppercase tracking-widest block mb-0.5">Phase Backlog Move</span>
                           <span className={`text-sm font-black ${isDrop ? "text-emerald-400" : ev.stats.drop > 0 ? "text-rose-400" : "text-slate-300"}`}>
-                            {isDrop ? "↓" : ev.stats.drop > 0 ? "↑" : ""}{drop} cases
+                            {isDrop ? "down " : ev.stats.drop > 0 ? "up " : ""}{drop} cases
                           </span>
                         </div>
                         <div>
@@ -334,6 +441,19 @@ function TimelineTab({ tasks }) {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-0.5">
                             <span className={`text-xs font-bold text-${color}-400`}>{ev.time}</span>
+                            {ev.outcomeLabel && (
+                              <span
+                                className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                                  ev.outcomeType === "success"
+                                    ? "bg-emerald-500/20 text-emerald-300"
+                                    : ev.outcomeType === "warning"
+                                      ? "bg-amber-500/20 text-amber-300"
+                                      : "bg-slate-600/20 text-slate-300"
+                                }`}
+                              >
+                                {ev.outcomeLabel}
+                              </span>
+                            )}
                             {ev.key && (
                               <span className="text-[10px] font-black bg-indigo-500/20 text-indigo-300 px-1.5 py-0.5 rounded tracking-wider">
                                 KEY MOMENT
@@ -341,14 +461,14 @@ function TimelineTab({ tasks }) {
                             )}
                             {ev._count > 1 && (
                               <span className="text-[10px] font-bold bg-slate-700 text-slate-400 px-1.5 py-0.5 rounded">
-                                ×{ev._count}
+                                x{ev._count}
                               </span>
                             )}
                           </div>
                           <h4 className="font-bold text-white text-sm flex items-center gap-1.5">
                             {ev.title}
-                            {ev.isHugeImpact && <span title="Massive Improvement" className="text-sm">⚡</span>}
-                            {ev.isHighReward && <span title="High Reward Action" className="text-sm">🔥</span>}
+                            {ev.isHugeImpact && <span title="Massive Improvement" className="text-sm">High Impact</span>}
+                            {ev.isHighReward && <span title="High Reward Action" className="text-sm">Hot</span>}
                           </h4>
                           <p className="text-xs text-slate-400 mt-1 leading-relaxed">{ev.desc}</p>
                           {ev.reason && (
@@ -379,18 +499,32 @@ function TimelineTab({ tasks }) {
           {resources.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-48 text-slate-500">
               <span className="material-symbols-outlined text-4xl mb-2 opacity-30">sensors</span>
-              <p className="text-sm">Awaiting live telemetry…</p>
+              <p className="text-sm">Awaiting live telemetry...</p>
             </div>
           ) : (
             <div className="space-y-5">
               {resources.map((res, i) => {
                 const color = res.percentage > 85 ? "rose" : res.percentage > 60 ? "amber" : "emerald";
+                const tone = color === "rose"
+                  ? {
+                      text: "text-rose-400",
+                      bar: "bg-rose-500",
+                    }
+                  : color === "amber"
+                    ? {
+                        text: "text-amber-400",
+                        bar: "bg-amber-500",
+                      }
+                    : {
+                        text: "text-emerald-400",
+                        bar: "bg-emerald-500",
+                      };
                 return (
                   <div key={res.name || i}>
                     <div className="flex justify-between mb-1.5">
                       <span className="text-sm font-semibold text-white">{res.name}</span>
                       <div className="flex items-center gap-2">
-                        <span className={`text-xs font-bold text-${color}-400`}>{res.activeCases} active</span>
+                        <span className={`text-xs font-bold ${tone.text}`}>{res.activeCases} active</span>
                         {res.percentage > 85 && (
                           <span className="text-[10px] font-black text-rose-400 bg-rose-500/10 px-1.5 rounded">OVERLOADED</span>
                         )}
@@ -398,7 +532,7 @@ function TimelineTab({ tasks }) {
                     </div>
                     <div className="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden">
                       <div
-                        className={`bg-${color}-500 h-full rounded-full transition-all duration-700 ease-in-out`}
+                        className={`${tone.bar} h-full rounded-full transition-all duration-700 ease-in-out`}
                         style={{ width: `${res.percentage}%` }}
                       />
                     </div>
@@ -408,7 +542,7 @@ function TimelineTab({ tasks }) {
             </div>
           )}
 
-          {/* Reward cumulative tracker — shown after first step */}
+          {/* Reward cumulative tracker - shown after first step */}
           {currentStep > 0 && (
             <div className="mt-6 pt-5 border-t border-white/5">
               <div className="text-xs font-semibold text-slate-400 mb-3 uppercase tracking-widest">Impact Summary</div>
@@ -433,7 +567,7 @@ function TimelineTab({ tasks }) {
 }
 
 
-// ─── Resources Tab ─────────────────────────────────────────────────────────────
+// --- Resources Tab ------------------------------------------------------------
 function BenchmarkResults({ results }) {
   const COLORS = { backlog_clearance: "#6366f1", urgent_first: "#10b981", oldest_first: "#f59e0b" };
   const sorted = [...results.agent_results].sort((a, b) => b.average_score - a.average_score);
@@ -452,7 +586,7 @@ function BenchmarkResults({ results }) {
             <div className="text-xl font-black text-white capitalize">{winner.agent_policy.replace(/_/g, " ")}</div>
             <div className="text-sm text-slate-400 mt-0.5">
               Avg score{" "}<span className="text-emerald-400 font-bold">{(winner.average_score * 100).toFixed(1)}%</span>
-              {" · "}Range {(winner.min_score * 100).toFixed(0)}%–{(winner.max_score * 100).toFixed(0)}%
+              {" | "}Range {(winner.min_score * 100).toFixed(0)}%-{(winner.max_score * 100).toFixed(0)}%
             </div>
           </div>
         </div>
@@ -479,7 +613,7 @@ function BenchmarkResults({ results }) {
               <div key={agent.agent_policy} className="flex flex-col items-center gap-2 w-28">
                 <div className="text-base font-black text-white">{(agent.average_score * 100).toFixed(1)}%</div>
                 <div className="relative w-full flex items-end justify-center" style={{ height: chartH }}>
-                  {isWinner && <div className="absolute -top-5 left-1/2 -translate-x-1/2 text-lg text-emerald-400">★</div>}
+                  {isWinner && <div className="absolute -top-5 left-1/2 -translate-x-1/2 text-lg text-emerald-400">Top</div>}
                   <div
                     className="w-full rounded-t-lg transition-all duration-700"
                     style={{
@@ -505,12 +639,12 @@ function BenchmarkResults({ results }) {
         <div className="space-y-6">
           {[
             {
-              label: "Score (↑ higher is better)",
+              label: "Score (higher is better)",
               vals: results.agent_results.map((a) => ({ key: a.agent_policy, v: a.average_score, display: `${(a.average_score * 100).toFixed(1)}%` })),
               higherGood: true,
             },
             {
-              label: "Avg Completed Cases (↑ higher is better)",
+              label: "Avg Completed Cases (higher is better)",
               vals: results.agent_results.map((a) => {
                 const avg = a.runs.reduce((s, r) => s + (r.completed ?? 0), 0) / Math.max(a.runs.length, 1);
                 return { key: a.agent_policy, v: avg, display: avg.toFixed(1) };
@@ -518,7 +652,7 @@ function BenchmarkResults({ results }) {
               higherGood: true,
             },
             {
-              label: "Avg Remaining Backlog (↓ lower is better)",
+              label: "Avg Remaining Backlog (lower is better)",
               vals: results.agent_results.map((a) => {
                 const avg = a.runs.reduce((s, r) => s + (r.backlog ?? 0), 0) / Math.max(a.runs.length, 1);
                 return { key: a.agent_policy, v: avg, display: avg.toFixed(1) };
@@ -541,7 +675,7 @@ function BenchmarkResults({ results }) {
                       <div key={v.key} className="flex items-center gap-3">
                         <div className="w-36 text-xs text-slate-300 capitalize shrink-0 flex items-center gap-1">
                           {v.key.replace(/_/g, " ")}
-                          {v.key === best.key && <span className="text-[10px] font-black text-emerald-400">★</span>}
+                          {v.key === best.key && <span className="text-[10px] font-black text-emerald-400">Top</span>}
                         </div>
                         <div className="flex-1 bg-slate-800 rounded-full h-2.5 overflow-hidden">
                           <div className="h-2.5 rounded-full transition-all duration-700" style={{ width: `${pct}%`, backgroundColor: color }} />
@@ -559,7 +693,7 @@ function BenchmarkResults({ results }) {
 
       {/* Raw episode table */}
       <div className="bg-slate-900/70 border border-white/5 rounded-xl p-6">
-        <h3 className="text-sm font-bold text-white mb-4">All Episodes — Raw Data</h3>
+        <h3 className="text-sm font-bold text-white mb-4">All Episodes - Raw Data</h3>
         <div className="overflow-x-auto">
           <table className="w-full text-xs text-left">
             <thead>
@@ -582,10 +716,10 @@ function BenchmarkResults({ results }) {
                     </td>
                     <td className="py-2 pr-4 text-slate-400">#{run.run_index}</td>
                     <td className="py-2 pr-4 font-bold text-white">{(run.score * 100).toFixed(1)}%</td>
-                    <td className="py-2 pr-4 text-amber-400">{run.reward_sum?.toFixed(2) ?? "—"}</td>
-                    <td className="py-2 pr-4 text-emerald-400">{run.completed ?? "—"}</td>
-                    <td className="py-2 pr-4 text-rose-400">{run.backlog ?? "—"}</td>
-                    <td className="py-2 text-slate-400">{run.steps ?? "—"}</td>
+                    <td className="py-2 pr-4 text-amber-400">{run.reward_sum?.toFixed(2) ?? "-"}</td>
+                    <td className="py-2 pr-4 text-emerald-400">{run.completed ?? "-"}</td>
+                    <td className="py-2 pr-4 text-rose-400">{run.backlog ?? "-"}</td>
+                    <td className="py-2 text-slate-400">{run.steps ?? "-"}</td>
                   </tr>
                 ))
               )}
@@ -652,7 +786,7 @@ function ResourcesTab({ tasks }) {
             disabled={loading}
             className="bg-violet-600 hover:bg-violet-500 text-white text-sm font-bold px-5 py-2 rounded-lg transition-all disabled:opacity-50"
           >
-            {loading ? "Simulating 9 episodes…" : "▶ Run Benchmark"}
+            {loading ? "Simulating 9 episodes..." : "Run Benchmark"}
           </button>
         </div>
       </div>
@@ -666,7 +800,7 @@ function ResourcesTab({ tasks }) {
       {loading && (
         <div className="bg-slate-900/70 border border-white/5 rounded-xl p-10 flex flex-col items-center gap-4">
           <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-slate-400 text-sm">Running 3 policies × 3 episodes each — takes ~20 seconds.</p>
+          <p className="text-slate-400 text-sm">Running 3 policies x 3 episodes each - takes ~20 seconds.</p>
         </div>
       )}
 
@@ -675,7 +809,7 @@ function ResourcesTab({ tasks }) {
   );
 }
 
-// ─── Library Tab ──────────────────────────────────────────────────────────────
+// --- Library Tab --------------------------------------------------------------
 function LibraryTab({ tasks }) {
   const [compliance, setCompliance] = useState(null);
   const [workflows, setWorkflows] = useState(null);
@@ -687,20 +821,102 @@ function LibraryTab({ tasks }) {
   }, []);
 
   const taskDetails = {
-    district_backlog_easy: { diff: "Easy", desc: "Single district, steady arrival rate. Agent learns basic reallocation.", services: 3 },
-    mixed_urgency_medium: { diff: "Medium", desc: "Mixed urgent/non-urgent cases with SLA pressure and missing docs.", services: 5 },
-    cross_department_hard: { diff: "Hard", desc: "Multi-department coordination, surge events, enrichment lookups.", services: 7 },
+    district_backlog_easy: { diff: "Easy", desc: "Single-service district queue focused on income certificate flow.", services: 1 },
+    mixed_urgency_medium: { diff: "Medium", desc: "Income, land, passport, driving license, and Aadhaar workloads with mixed urgency.", services: 5 },
+    cross_department_hard: { diff: "Hard", desc: "Five-service crisis mode with high arrivals, fairness pressure, and event shocks.", services: 5 },
   };
+
+  const systemTabGuide = [
+    {
+      id: "timeline",
+      title: "Simulation (Timeline Tab)",
+      icon: "timeline",
+      summary: "Runs live step-by-step environment simulation and shows queue movement, KPI changes, and decision timeline in real time.",
+      userFlow: "Choose scenario, steps, and model/policy, then start auto-resolution.",
+      outputs: "Live backlog, SLA, fairness, key moments, queue pressure bars, and impact summary.",
+      endpoints: ["/simulation/live/start", "/simulation/live/step", "/simulation/live/{run_id}/stop", "/tasks", "/agents", "/rl_models", "/rl/models"],
+    },
+    {
+      id: "training",
+      title: "Training Tab",
+      icon: "fitness_center",
+      summary: "Controls RL training jobs and tracks how the policy improves over timesteps.",
+      userFlow: "Start/stop a training job and monitor live checkpoints and job history.",
+      outputs: "Active job state, progress, reward/score checkpoints, sequential narrative feed, and OpenEnv contract replay results.",
+      endpoints: ["/training_jobs", "/training_jobs/list", "/training_jobs/{job_id}", "/training_jobs/{job_id}/stop", "/reset", "/step", "/state", "/grade"],
+    },
+    {
+      id: "analytics",
+      title: "Analytics Tab",
+      icon: "analytics",
+      summary: "Shows endpoint-fed system analytics from historical simulation, jobs, models, sessions, and compliance health.",
+      userFlow: "Open the tab; metrics auto-refresh from backend every few seconds.",
+      outputs: "Task distributions, mode splits, training status mix, endpoint health, model inventory, and run history tables.",
+      endpoints: ["/history/simulations", "/history/comparisons", "/training_jobs", "/rl_models", "/rl/models", "/tasks", "/agents", "/sessions", "/actions/schema", "/openenv_compliance", "/workflows/components"],
+    },
+    {
+      id: "resources",
+      title: "Resources Tab (Benchmark)",
+      icon: "leaderboard",
+      summary: "Compares baseline policies on the same task to identify which strategy performs best.",
+      userFlow: "Select a scenario and run benchmark.",
+      outputs: "Winner policy card, score bars, metric comparison bars, and raw run-level benchmark table.",
+      endpoints: ["/compare_agents"],
+    },
+    {
+      id: "library",
+      title: "Library Tab",
+      icon: "menu_book",
+      summary: "Acts as the complete system overview and reference center for tasks, compliance, and workflow availability.",
+      userFlow: "Explore scenarios, inspect OpenEnv checks, and verify available workflow components.",
+      outputs: "Task cards with difficulty/service counts, compliance checklist, and component readiness matrix.",
+      endpoints: ["/tasks", "/openenv_compliance", "/workflows/components"],
+    },
+  ];
 
   return (
     <div className="space-y-6">
+      <div className="bg-slate-900/70 border border-white/5 rounded-xl p-6">
+        <h2 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
+          <span className="material-symbols-outlined text-violet-400">hub</span> Complete System Overview
+        </h2>
+        <p className="text-sm text-slate-400 mb-5">
+          This section explains how each product tab works, what backend APIs power it, and what outputs users can expect.
+          Use it as a quick guide for judges and reviewers.
+        </p>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {systemTabGuide.map((tab) => (
+            <div key={tab.id} className="bg-slate-800/50 border border-white/5 rounded-xl p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="material-symbols-outlined text-indigo-300">{tab.icon}</span>
+                <h3 className="text-sm font-bold text-white">{tab.title}</h3>
+              </div>
+              <p className="text-xs text-slate-300 leading-relaxed mb-2">{tab.summary}</p>
+              <div className="text-xs text-slate-400 mb-1">
+                <span className="text-slate-300 font-semibold">User flow:</span> {tab.userFlow}
+              </div>
+              <div className="text-xs text-slate-400 mb-3">
+                <span className="text-slate-300 font-semibold">Outputs:</span> {tab.outputs}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {tab.endpoints.map((ep) => (
+                  <code key={ep} className="text-[10px] text-cyan-300 bg-slate-900 px-1.5 py-0.5 rounded border border-cyan-500/20">
+                    {ep}
+                  </code>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       <div>
         <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
           <span className="material-symbols-outlined text-amber-400">menu_book</span> Scenario Library
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {tasks.map((t) => {
-            const info = taskDetails[t] || { diff: "—", desc: "Custom scenario.", services: "—" };
+            const info = taskDetails[t] || { diff: "-", desc: "Custom scenario.", services: "-" };
             const diffColor = info.diff === "Easy" ? "emerald" : info.diff === "Medium" ? "amber" : "rose";
             const isSelected = selected === t;
             return (
@@ -776,19 +992,98 @@ function LibraryTab({ tasks }) {
   );
 }
 
-// ─── Analytics Tab ─────────────────────────────────────────────────────────────
+// --- Analytics Tab ------------------------------------------------------------
 function AnalyticsTab() {
   const [history, setHistory] = useState([]);
   const [rlModels, setRlModels] = useState([]);
+  const [rlModelsV2, setRlModelsV2] = useState([]);
+  const [trainingJobs, setTrainingJobs] = useState([]);
+  const [tasksList, setTasksList] = useState([]);
+  const [agentsList, setAgentsList] = useState([]);
+  const [sessionsInfo, setSessionsInfo] = useState({ active_sessions: 0, session_ids: [] });
+  const [actionsSchema, setActionsSchema] = useState({});
+  const [complianceInfo, setComplianceInfo] = useState({ items: [] });
+  const [workflowInfo, setWorkflowInfo] = useState({ components: [] });
+  const [comparisonsInfo, setComparisonsInfo] = useState({ comparisons: [] });
+  const [endpointHealth, setEndpointHealth] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
+  const [loadingAll, setLoadingAll] = useState(true);
 
   useEffect(() => {
-    setLoadingHistory(true);
-    api("/history/simulations?limit=30")
-      .then((d) => setHistory(d.runs || []))
-      .catch(() => setHistory([]))
-      .finally(() => setLoadingHistory(false));
-    api("/rl_models").then((d) => setRlModels(d.models || [])).catch(() => {});
+    let cancelled = false;
+
+    const load = async () => {
+      setLoadingHistory(true);
+      setLoadingAll(true);
+      try {
+        const [
+          historyRes,
+          rlRes,
+          rlResV2,
+          jobsRes,
+          tasksRes,
+          agentsRes,
+          sessionsRes,
+          actionsRes,
+          complianceRes,
+          workflowsRes,
+          comparisonsRes,
+        ] = await Promise.allSettled([
+          api("/history/simulations?limit=80"),
+          api("/rl_models"),
+          api("/rl/models"),
+          api("/training_jobs"),
+          api("/tasks"),
+          api("/agents"),
+          api("/sessions"),
+          api("/actions/schema"),
+          api("/openenv_compliance"),
+          api("/workflows/components"),
+          api("/history/comparisons?limit=30"),
+        ]);
+
+        if (cancelled) return;
+
+        const checks = [
+          { key: "history", label: "History", ok: historyRes.status === "fulfilled" },
+          { key: "rl_models", label: "RL Models", ok: rlRes.status === "fulfilled" },
+          { key: "rl_models_v2", label: "RL Models V2", ok: rlResV2.status === "fulfilled" },
+          { key: "training_jobs", label: "Training Jobs", ok: jobsRes.status === "fulfilled" },
+          { key: "tasks", label: "Tasks", ok: tasksRes.status === "fulfilled" },
+          { key: "agents", label: "Agents", ok: agentsRes.status === "fulfilled" },
+          { key: "sessions", label: "Sessions", ok: sessionsRes.status === "fulfilled" },
+          { key: "actions_schema", label: "Action Schema", ok: actionsRes.status === "fulfilled" },
+          { key: "openenv_compliance", label: "Compliance", ok: complianceRes.status === "fulfilled" },
+          { key: "workflow_components", label: "Workflow Components", ok: workflowsRes.status === "fulfilled" },
+          { key: "comparison_history", label: "Comparison History", ok: comparisonsRes.status === "fulfilled" },
+        ];
+        setEndpointHealth(checks);
+
+        setHistory(historyRes.status === "fulfilled" ? (historyRes.value?.runs || []) : []);
+        setRlModels(rlRes.status === "fulfilled" ? (rlRes.value?.models || []) : []);
+        setRlModelsV2(rlResV2.status === "fulfilled" ? (Array.isArray(rlResV2.value) ? rlResV2.value : []) : []);
+        setTrainingJobs(jobsRes.status === "fulfilled" ? (jobsRes.value?.jobs || []) : []);
+        setTasksList(tasksRes.status === "fulfilled" ? (tasksRes.value?.tasks || []) : []);
+        setAgentsList(agentsRes.status === "fulfilled" ? (Array.isArray(agentsRes.value) ? agentsRes.value : []) : []);
+        setSessionsInfo(sessionsRes.status === "fulfilled" ? (sessionsRes.value || { active_sessions: 0, session_ids: [] }) : { active_sessions: 0, session_ids: [] });
+        setActionsSchema(actionsRes.status === "fulfilled" ? (actionsRes.value || {}) : {});
+        setComplianceInfo(complianceRes.status === "fulfilled" ? (complianceRes.value || { items: [] }) : { items: [] });
+        setWorkflowInfo(workflowsRes.status === "fulfilled" ? (workflowsRes.value || { components: [] }) : { components: [] });
+        setComparisonsInfo(comparisonsRes.status === "fulfilled" ? (comparisonsRes.value || { comparisons: [] }) : { comparisons: [] });
+      } finally {
+        if (!cancelled) {
+          setLoadingHistory(false);
+          setLoadingAll(false);
+        }
+      }
+    };
+
+    load();
+    const timer = setInterval(load, 8000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
   }, []);
 
   const byTask = history.reduce((acc, run) => {
@@ -798,8 +1093,152 @@ function AnalyticsTab() {
     return acc;
   }, {});
 
-  const scoreData = history.filter((r) => r.score != null);
-  const avgScore = scoreData.length ? scoreData.reduce((s, r) => s + r.score, 0) / scoreData.length : null;
+  const getRunScore = (run) => {
+    const value = run?.score ?? run?.payload?.score;
+    const num = Number(value);
+    return Number.isFinite(num) ? num : null;
+  };
+
+  const getRunReward = (run) => {
+    const value = run?.total_reward ?? run?.payload?.total_reward;
+    const num = Number(value);
+    return Number.isFinite(num) ? num : null;
+  };
+
+  const getJobProgress = (job) => {
+    const p = Number(job?.progress);
+    if (Number.isFinite(p)) return Math.max(0, Math.min(1, p));
+    const ts = Number(job?.latest_metrics?.total_timesteps);
+    const total = Number(job?.timesteps);
+    if (Number.isFinite(ts) && Number.isFinite(total) && total > 0) {
+      return Math.max(0, Math.min(1, ts / total));
+    }
+    return 0;
+  };
+
+  const scoreData = history.map(getRunScore).filter((v) => v != null);
+  const avgScore = scoreData.length ? scoreData.reduce((s, v) => s + v, 0) / scoreData.length : null;
+  const runningJobs = trainingJobs.filter((j) => String(j?.status || "").toLowerCase() === "running").length;
+  const endpointCoverage = endpointHealth.length
+    ? endpointHealth.filter((x) => x.ok).length / endpointHealth.length
+    : null;
+
+  const timelineTaskRows = Object.entries(byTask)
+    .map(([label, runs]) => ({ label, value: runs.length }))
+    .sort((a, b) => b.value - a.value);
+
+  const timelineModeRows = Object.entries(
+    history.reduce((acc, run) => {
+      const mode = String(run?.agent_mode || "unknown");
+      acc[mode] = (acc[mode] || 0) + 1;
+      return acc;
+    }, {})
+  ).map(([label, value]) => ({ label, value }));
+
+  const trainingStatusRows = Object.entries(
+    trainingJobs.reduce((acc, job) => {
+      const status = String(job?.status || "unknown").toLowerCase();
+      acc[status] = (acc[status] || 0) + 1;
+      return acc;
+    }, {})
+  ).map(([label, value]) => ({ label, value }));
+
+  const trainingPhaseRows = [1, 2].map((phase) => {
+    const rows = trainingJobs.filter((job) => Number(job?.phase || 0) === phase);
+    const avgProgress = rows.length
+      ? rows.reduce((sum, job) => sum + getJobProgress(job), 0) / rows.length
+      : 0;
+    return {
+      label: `Phase ${phase}`,
+      value: Number((avgProgress * 100).toFixed(1)),
+      jobs: rows.length,
+    };
+  });
+
+  const compliancePass = Array.isArray(complianceInfo?.items)
+    ? complianceInfo.items.filter((x) => x?.status === "pass").length
+    : 0;
+  const complianceFail = Array.isArray(complianceInfo?.items)
+    ? complianceInfo.items.filter((x) => x?.status === "fail").length
+    : 0;
+  const complianceUnknown = Array.isArray(complianceInfo?.items)
+    ? complianceInfo.items.filter((x) => x?.status !== "pass" && x?.status !== "fail").length
+    : 0;
+
+  const systemMetricRows = [
+    { label: "Tasks", value: tasksList.length },
+    { label: "Agents", value: agentsList.length },
+    { label: "Action Types", value: Number(actionsSchema?.total_action_types || 0) },
+    { label: "Active Sessions", value: Number(sessionsInfo?.active_sessions || 0) },
+    { label: "RL Models V1", value: rlModels.filter((m) => m.exists).length },
+    { label: "RL Models V2", value: rlModelsV2.filter((m) => m.exists).length },
+    {
+      label: "Workflow Components",
+      value: Array.isArray(workflowInfo?.components)
+        ? workflowInfo.components.filter((x) => x?.available).length
+        : 0,
+    },
+    { label: "Comparisons", value: Array.isArray(comparisonsInfo?.comparisons) ? comparisonsInfo.comparisons.length : 0 },
+  ];
+
+  const buildConicGradient = (rows, palette) => {
+    const total = rows.reduce((sum, row) => sum + Number(row?.value || 0), 0);
+    if (total <= 0) return null;
+    let cursor = 0;
+    const segments = [];
+    rows.forEach((row, idx) => {
+      const value = Number(row?.value || 0);
+      if (value <= 0) return;
+      const delta = (value / total) * 100;
+      const start = cursor;
+      const end = cursor + delta;
+      segments.push(`${palette[idx % palette.length]} ${start.toFixed(2)}% ${end.toFixed(2)}%`);
+      cursor = end;
+    });
+    if (cursor < 100) {
+      segments.push(`#1e293b ${cursor.toFixed(2)}% 100%`);
+    }
+    return `conic-gradient(${segments.join(", ")})`;
+  };
+
+  const timelineModeGradient = buildConicGradient(
+    timelineModeRows,
+    ["#22d3ee", "#a78bfa", "#f59e0b", "#34d399", "#f472b6"]
+  );
+  const trainingStatusGradient = buildConicGradient(
+    trainingStatusRows,
+    ["#22c55e", "#eab308", "#6366f1", "#ef4444", "#64748b"]
+  );
+  const complianceGradient = buildConicGradient(
+    [
+      { label: "pass", value: compliancePass },
+      { label: "fail", value: complianceFail },
+      { label: "unknown", value: complianceUnknown },
+    ],
+    ["#22c55e", "#ef4444", "#f59e0b"]
+  );
+
+  const renderBars = (rows, color = "bg-indigo-500") => {
+    const maxVal = Math.max(...rows.map((r) => Number(r?.value || 0)), 1);
+    return (
+      <div className="space-y-2">
+        {rows.map((row) => {
+          const widthPct = Math.max(0, Math.min(100, (Number(row.value || 0) / maxVal) * 100));
+          return (
+            <div key={row.label} className="space-y-1">
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-300">{row.label.replace(/_/g, " ")}</span>
+                <span className="text-white font-semibold">{Number(row.value || 0)}</span>
+              </div>
+              <div className="h-2 w-full rounded bg-slate-800 overflow-hidden">
+                <div className={`h-full ${color}`} style={{ width: `${widthPct}%` }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -807,8 +1246,8 @@ function AnalyticsTab() {
         {[
           { label: "Total Runs", value: history.length, icon: "play_circle", color: "indigo" },
           { label: "Avg Score", value: avgScore != null ? `${(avgScore * 100).toFixed(1)}%` : "—", icon: "grade", color: "emerald" },
-          { label: "Scenarios", value: Object.keys(byTask).length, icon: "map", color: "violet" },
-          { label: "RL Models", value: rlModels.filter((m) => m.exists).length, icon: "model_training", color: "amber" },
+          { label: "Running Jobs", value: runningJobs, icon: "settings_slow_motion", color: "violet" },
+          { label: "Endpoint Coverage", value: endpointCoverage != null ? `${(endpointCoverage * 100).toFixed(0)}%` : "—", icon: "hub", color: "amber" },
         ].map((s) => (
           <div key={s.label} className="bg-slate-900/70 border border-white/5 rounded-xl p-4">
             <div className="flex items-center gap-2 mb-2">
@@ -820,52 +1259,134 @@ function AnalyticsTab() {
         ))}
       </div>
 
-      {!loadingHistory && history.length > 0 && (
+      {!loadingHistory && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="bg-slate-900/70 border border-white/5 rounded-xl p-6">
             <h2 className="text-base font-bold text-white mb-4 flex items-center gap-2">
-              <span className="material-symbols-outlined text-cyan-400">trending_up</span> Recent Progression
+              <span className="material-symbols-outlined text-cyan-400">bar_chart</span> Timeline Metric: Runs by Task
             </h2>
-            <div className="space-y-3">
-              {history.slice(0, 5).map((run, idx, arr) => {
-                const curScore = run.score ?? run.payload?.score ?? 0;
-                const prev = arr[idx + 1];
-                const prevScore = prev ? (prev.score ?? prev.payload?.score ?? 0) : curScore;
-                const trend = curScore >= prevScore ? "↗" : "↘";
-                const color = curScore >= prevScore ? "emerald" : "rose";
-                return (
-                  <div key={run.run_id} className="flex justify-between items-center bg-slate-800/40 border border-white/5 p-3 rounded-lg">
-                    <div>
-                      <div className="text-xs font-mono text-slate-400">{run.run_id?.slice(0, 6)}</div>
-                      <div className="text-sm font-semibold text-white truncate max-w-[150px]">{run.task_id?.replace(/_/g, " ")}</div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className={`text-[10px] font-black tracking-widest text-${color}-400`}>{trend}</span>
-                      <span className="text-lg font-black text-white">{(curScore * 100).toFixed(1)}%</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            {timelineTaskRows.length === 0 ? (
+              <div className="text-xs text-slate-500">No timeline history yet.</div>
+            ) : renderBars(timelineTaskRows, "bg-cyan-500")}
           </div>
 
           <div className="bg-slate-900/70 border border-white/5 rounded-xl p-6 h-full flex flex-col">
             <h2 className="text-base font-bold text-white mb-4 flex items-center gap-2">
-              <span className="material-symbols-outlined text-amber-400">stacked_line_chart</span> Reward Trajectory
+              <span className="material-symbols-outlined text-violet-400">pie_chart</span> Timeline Metric: Agent Mode Mix
             </h2>
-            <div className="flex-1 w-full relative min-h-[160px] bg-slate-950/50 border border-white/5 rounded p-2">
-              <svg viewBox="0 0 400 160" className="w-full h-full overflow-visible">
-                <polyline
-                  points={[...history].reverse().filter(r => r.payload?.total_reward != null).map((r, i, arr) => {
-                    const maxR = Math.max(...arr.map(x => x.payload.total_reward), 10);
-                    const minR = Math.min(...arr.map(x => x.payload.total_reward), -10);
-                    const x = (i / Math.max(arr.length - 1, 1)) * 400;
-                    const y = 160 - ((r.payload.total_reward - minR) / (maxR - minR || 1)) * 160;
-                    return `${x},${y}`;
-                  }).join(" ")}
-                  fill="none" stroke="#fbbf24" strokeWidth="2" strokeLinejoin="round"
-                />
-              </svg>
+            {timelineModeGradient ? (
+              <div className="grid grid-cols-[120px,1fr] gap-4 items-center">
+                <div className="relative w-[120px] h-[120px] rounded-full" style={{ background: timelineModeGradient }}>
+                  <div className="absolute inset-[18px] rounded-full bg-slate-950/95 border border-white/5" />
+                </div>
+                <div className="space-y-2">
+                  {timelineModeRows.map((row, idx) => (
+                    <div key={row.label} className="flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2 text-slate-300">
+                        <span
+                          className="inline-block w-2.5 h-2.5 rounded-full"
+                          style={{ backgroundColor: ["#22d3ee", "#a78bfa", "#f59e0b", "#34d399", "#f472b6"][idx % 5] }}
+                        />
+                        {row.label}
+                      </div>
+                      <span className="text-white font-semibold">{row.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="text-xs text-slate-500">No timeline mode data yet.</div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {!loadingAll && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="bg-slate-900/70 border border-white/5 rounded-xl p-6">
+            <h2 className="text-base font-bold text-white mb-4 flex items-center gap-2">
+              <span className="material-symbols-outlined text-emerald-400">stacked_bar_chart</span> Training Metric: Job Status Mix
+            </h2>
+            {trainingStatusGradient ? (
+              <div className="space-y-3">
+                <div className="h-4 rounded bg-slate-800 overflow-hidden">
+                  <div className="h-full" style={{ background: trainingStatusGradient }} />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {trainingStatusRows.map((row, idx) => (
+                    <div key={row.label} className="flex items-center justify-between text-xs bg-slate-800/40 border border-white/5 rounded px-2 py-1">
+                      <div className="flex items-center gap-2 text-slate-300">
+                        <span
+                          className="inline-block w-2.5 h-2.5 rounded-full"
+                          style={{ backgroundColor: ["#22c55e", "#eab308", "#6366f1", "#ef4444", "#64748b"][idx % 5] }}
+                        />
+                        {row.label}
+                      </div>
+                      <span className="text-white font-semibold">{row.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="text-xs text-slate-500">No training jobs available yet.</div>
+            )}
+          </div>
+
+          <div className="bg-slate-900/70 border border-white/5 rounded-xl p-6">
+            <h2 className="text-base font-bold text-white mb-4 flex items-center gap-2">
+              <span className="material-symbols-outlined text-indigo-400">dataset</span> Training Metric: Phase Progress (%)
+            </h2>
+            <div className="space-y-3">
+              {trainingPhaseRows.map((row) => (
+                <div key={row.label} className="space-y-1">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-slate-300">{row.label}</span>
+                    <span className="text-white font-semibold">{row.value.toFixed(1)}% · {row.jobs} jobs</span>
+                  </div>
+                  <div className="h-2 w-full rounded bg-slate-800 overflow-hidden">
+                    <div className="h-full bg-indigo-500" style={{ width: `${Math.max(0, Math.min(100, row.value))}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!loadingAll && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="bg-slate-900/70 border border-white/5 rounded-xl p-6 h-full flex flex-col">
+            <h2 className="text-base font-bold text-white mb-4 flex items-center gap-2">
+              <span className="material-symbols-outlined text-cyan-400">analytics</span> System Metric: Endpoint-fed Counts
+            </h2>
+            {renderBars(systemMetricRows, "bg-cyan-500")}
+          </div>
+
+          <div className="bg-slate-900/70 border border-white/5 rounded-xl p-6 h-full flex flex-col">
+            <h2 className="text-base font-bold text-white mb-4 flex items-center gap-2">
+              <span className="material-symbols-outlined text-violet-400">policy</span>
+              System Metric: Compliance + Endpoint Health
+            </h2>
+            <div className="grid grid-cols-[120px,1fr] gap-4 items-center mb-4">
+              <div className="relative w-[120px] h-[120px] rounded-full" style={{ background: complianceGradient || "#1e293b" }}>
+                <div className="absolute inset-[18px] rounded-full bg-slate-950/95 border border-white/5" />
+              </div>
+              <div className="space-y-1 text-xs">
+                <div className="flex justify-between"><span className="text-slate-300">Pass</span><span className="text-emerald-400 font-semibold">{compliancePass}</span></div>
+                <div className="flex justify-between"><span className="text-slate-300">Fail</span><span className="text-rose-400 font-semibold">{complianceFail}</span></div>
+                <div className="flex justify-between"><span className="text-slate-300">Unknown</span><span className="text-amber-300 font-semibold">{complianceUnknown}</span></div>
+              </div>
+            </div>
+            <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-2">Endpoint Health</h3>
+            <div className="grid grid-cols-2 gap-2">
+              {endpointHealth.map((row) => (
+                <div
+                  key={row.key}
+                  className={`text-xs border rounded px-2 py-1 ${row.ok ? "border-emerald-500/30 text-emerald-300 bg-emerald-500/10" : "border-rose-500/30 text-rose-300 bg-rose-500/10"}`}
+                >
+                  {row.label}
+                </div>
+              ))}
             </div>
           </div>
         </div>
@@ -897,7 +1418,8 @@ function AnalyticsTab() {
               </thead>
               <tbody>
                 {history.map((run) => {
-                  const score = run.score ?? run.payload?.score;
+                  const score = getRunScore(run);
+                  const reward = getRunReward(run);
                   const status = run.status || "completed";
                   const statusColor = status === "completed" ? "emerald" : status === "running" ? "amber" : "slate";
                   return (
@@ -909,7 +1431,7 @@ function AnalyticsTab() {
                         <span className={`bg-${statusColor}-500/20 text-${statusColor}-400 text-xs font-bold px-2 py-0.5 rounded-full`}>{status}</span>
                       </td>
                       <td className="py-2 pr-4 font-bold text-white">{score != null ? `${(score * 100).toFixed(1)}%` : "—"}</td>
-                      <td className="py-2 text-amber-400">{run.payload?.total_reward?.toFixed(2) ?? "—"}</td>
+                      <td className="py-2 text-amber-400">{reward != null ? reward.toFixed(2) : "—"}</td>
                     </tr>
                   );
                 })}
@@ -924,21 +1446,28 @@ function AnalyticsTab() {
           <span className="material-symbols-outlined text-amber-400">model_training</span> Trained RL Model Checkpoints
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {rlModels.length === 0 ? (
+          {rlModels.length === 0 && rlModelsV2.length === 0 ? (
             <p className="text-slate-500 text-sm col-span-3">No trained models found. Train a model via the RL pipeline first.</p>
-          ) : rlModels.map((m) => (
-            <div key={m.path} className={`border rounded-xl p-4 ${m.exists ? "border-amber-500/30 bg-amber-500/5" : "border-white/5 bg-slate-800/40"}`}>
-              <div className="flex items-center gap-2 mb-2">
-                <span className={`material-symbols-outlined text-lg ${m.exists ? "text-amber-400" : "text-slate-600"}`}>
-                  {m.exists ? "check_circle" : "radio_button_unchecked"}
-                </span>
-                <span className="text-sm font-bold text-white">{m.label}</span>
+          ) : (
+            [...rlModels, ...rlModelsV2.map((m) => ({
+              label: m.model_path ? String(m.model_path).split(/[\\/]/).pop() : "unnamed",
+              path: m.model_path ? `${m.model_path}.zip` : "",
+              exists: Boolean(m.exists),
+              model_type: Number(m.phase) === 2 ? "phase2" : "phase1",
+            }))].map((m) => (
+              <div key={`${m.path}-${m.label}`} className={`border rounded-xl p-4 ${m.exists ? "border-amber-500/30 bg-amber-500/5" : "border-white/5 bg-slate-800/40"}`}>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className={`material-symbols-outlined text-lg ${m.exists ? "text-amber-400" : "text-slate-600"}`}>
+                    {m.exists ? "check_circle" : "radio_button_unchecked"}
+                  </span>
+                  <span className="text-sm font-bold text-white">{m.label}</span>
+                </div>
+                <div className="text-xs text-slate-400 font-mono truncate">{m.path?.split("\\").pop() || m.path?.split("/").pop()}</div>
+                <div className="text-xs text-slate-500 mt-1">Type: {m.model_type}</div>
+                {!m.exists && <div className="text-xs text-slate-600 mt-2">Not yet trained</div>}
               </div>
-              <div className="text-xs text-slate-400 font-mono truncate">{m.path?.split("\\").pop() || m.path?.split("/").pop()}</div>
-              <div className="text-xs text-slate-500 mt-1">Type: {m.model_type}</div>
-              {!m.exists && <div className="text-xs text-slate-600 mt-2">Not yet trained</div>}
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </div>
 
@@ -951,21 +1480,15 @@ function AnalyticsTab() {
             {Object.entries(byTask).map(([task, runs]) => {
               const scores = runs.map((r) => r.score ?? r.payload?.score).filter((s) => s != null);
               const avg = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : null;
+              const avgPct = avg != null ? Number((avg * 100).toFixed(1)) : 0;
               return (
-                <div key={task}>
-                  <div className="flex justify-between text-sm mb-2">
+                <div key={task} className="space-y-1">
+                  <div className="flex justify-between text-sm">
                     <span className="font-semibold text-white">{task.replace(/_/g, " ")}</span>
-                    <span className="text-slate-400">{runs.length} runs · avg {avg != null ? `${(avg * 100).toFixed(1)}%` : "—"}</span>
+                    <span className="text-slate-400">{runs.length} runs · avg {avg != null ? `${avgPct}%` : "—"}</span>
                   </div>
-                  <div className="flex gap-0.5 h-3 w-full rounded-full overflow-hidden bg-slate-800">
-                    {scores.map((s, i) => (
-                      <div
-                        key={i}
-                        title={`${(s * 100).toFixed(1)}%`}
-                        className="h-full bg-indigo-500 hover:bg-indigo-400 transition-colors"
-                        style={{ width: `${100 / Math.max(scores.length, 1)}%`, opacity: 0.4 + s * 0.6 }}
-                      />
-                    ))}
+                  <div className="h-2 w-full rounded bg-slate-800 overflow-hidden">
+                    <div className="h-full bg-violet-500" style={{ width: `${Math.max(0, Math.min(100, avgPct))}%` }} />
                   </div>
                 </div>
               );
@@ -977,206 +1500,20 @@ function AnalyticsTab() {
   );
 }
 
-// ─── Training Tab (Real RL Backend Integration) ──────────────────────────────────
 function TrainingTab({ tasks }) {
-  const [activeJobId, setActiveJobId] = useState(null);
-  const [status, setStatus] = useState("idle");
-  const [progress, setProgress] = useState(0);
-  const [rewardHistory, setRewardHistory] = useState([]);
-  const [selectedPhase, setSelectedPhase] = useState(1);
-  const [errorMsg, setErrorMsg] = useState("");
-
-  // On mount, try to find an active job to reconnect
-  useEffect(() => {
-    api("/training_jobs").then((data) => {
-      if (data.jobs && data.jobs.length > 0) {
-        // Find first running or queued job
-        const active = data.jobs.find((j) => j.status === "running" || j.status === "queued");
-        if (active) {
-          setActiveJobId(active.job_id);
-          setStatus(active.status);
-          setSelectedPhase(active.phase || 1);
-        }
-      }
-    }).catch(e => console.error(e));
-  }, []);
-
-  const startTraining = async () => {
-    setErrorMsg("");
-    setRewardHistory([]);
-    setProgress(0);
-    setStatus("starting");
-    try {
-      const res = await api("/training_jobs", {
-        method: "POST",
-        body: JSON.stringify({
-          phase: selectedPhase,
-          timesteps: 120_000,
-          n_envs: 4,
-          seed: Math.floor(Math.random() * 100000),
-        })
-      });
-      if (res.job_id) {
-        setActiveJobId(res.job_id);
-        setStatus("running");
-      }
-    } catch (e) {
-      setErrorMsg(e.message || "Failed to start training.");
-      setStatus("error");
-    }
-  };
-
-  const stopTraining = async () => {
-    if (!activeJobId) return;
-    try {
-      await api(`/training_jobs/${activeJobId}/stop`, { method: "POST" });
-      setStatus("stopped");
-      setActiveJobId(null);
-    } catch (e) {
-      setErrorMsg(e.message || "Failed to stop training.");
-    }
-  };
-
-  // Poll for job updates
-  useEffect(() => {
-    if (!activeJobId || (status !== "running" && status !== "queued")) return;
-
-    const parseLogsForChart = (logs) => {
-      if (!logs) return [];
-      const pts = [];
-      let latestReward = null;
-      for (const line of logs) {
-        if (line.includes("ep_rew_mean")) {
-          const m = line.match(/\|\s*ep_rew_mean\s*\|\s*([-\d.]+)/);
-          if (m) latestReward = parseFloat(m[1]);
-        }
-        if (latestReward !== null && line.includes("total_timesteps")) {
-          const m = line.match(/\|\s*total_timesteps\s*\|\s*(\d+)/);
-          if (m) {
-             pts.push({ time: parseInt(m[1]), reward: latestReward });
-             latestReward = null;
-          }
-        }
-      }
-      return pts;
-    };
-
-    const timer = setInterval(async () => {
-      try {
-        const job = await api(`/training_jobs/${activeJobId}`);
-        setStatus(job.status);
-        setProgress(job.progress || 0);
-
-        if (job.status === "failed") {
-          setErrorMsg(job.error_message || "Training job failed.");
-        }
-
-        const parsedPoints = parseLogsForChart(job.logs_tail);
-        if (parsedPoints.length > 0) {
-           setRewardHistory(parsedPoints);
-        }
-      } catch (e) {
-         // silently ignore transient network drops
-      }
-    }, 1500);
-
-    return () => clearInterval(timer);
-  }, [activeJobId, status]);
-
-  const bestReward = rewardHistory.length ? Math.max(...rewardHistory.map((h) => h.reward)) : null;
-  const currentReward = rewardHistory.length ? rewardHistory[rewardHistory.length - 1].reward : null;
-
-  // SVG Line Chart Generation (dynamic scaling)
-  const hW = 600, hH = 200;
-  const maxR = rewardHistory.length ? Math.max(...rewardHistory.map(r => r.reward), 15) : 15;
-  const minR = rewardHistory.length ? Math.min(...rewardHistory.map(r => r.reward), -15) : -15;
-  const points = rewardHistory.map((pt, i) => {
-    const x = (i / Math.max(rewardHistory.length - 1, 1)) * hW;
-    const y = hH - ((pt.reward - minR) / (maxR - minR || 1)) * hH;
-    return `${x},${y}`;
-  }).join(" ");
-
-  const isRunning = status === "running" || status === "queued" || status === "starting";
-
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap gap-3 items-center justify-between bg-slate-900/60 border border-white/5 rounded-xl px-5 py-3">
-        <div className="flex items-center gap-3">
-          <span className="text-slate-400 text-sm font-medium">Training Phase</span>
-          <select
-            value={selectedPhase}
-            onChange={(e) => setSelectedPhase(parseInt(e.target.value))}
-            disabled={isRunning}
-            className="appearance-none bg-slate-800 border border-white/10 text-sm font-medium px-3 py-1.5 rounded-lg text-indigo-300 focus:outline-none focus:border-indigo-500 cursor-pointer"
-          >
-            <option value={1}>PHASE 1 (PPO Easy Baseline)</option>
-            <option value={2}>PHASE 2 (PPO Curriculum)</option>
-          </select>
-        </div>
-        <div className="flex items-center gap-3">
-          {errorMsg && <div className="text-xs font-bold text-rose-400 bg-rose-500/10 px-3 py-1 rounded truncate max-w-[200px]">{errorMsg}</div>}
-          <button
-            onClick={isRunning ? stopTraining : startTraining}
-            className={`text-white text-sm font-bold px-6 py-2 rounded-lg transition-all duration-300 ${
-              isRunning ? "bg-rose-500/80 hover:bg-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.4)]" : "bg-gradient-to-r from-violet-600 to-indigo-500 hover:shadow-[0_0_25px_rgba(99,102,241,0.7)]"
-            }`}
-          >
-            {isRunning ? "⏹ Stop Training" : "▶ Start PPO Training"}
-          </button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-slate-900/70 border border-white/5 p-5 rounded-xl">
-          <div className="text-xs font-semibold tracking-widest text-slate-400 uppercase mb-2">Training Progress</div>
-          <div className="text-4xl font-black text-white">{(progress * 100).toFixed(1)}%</div>
-        </div>
-        <div className="bg-slate-900/70 border border-white/5 p-5 rounded-xl relative overflow-hidden">
-          <div className="text-xs font-semibold tracking-widest text-slate-400 uppercase mb-2">Current Reward</div>
-          <div className="text-4xl font-black text-indigo-300">{currentReward != null ? currentReward.toFixed(2) : "—"}</div>
-        </div>
-        <div className="bg-slate-900/70 border border-white/5 p-5 rounded-xl relative overflow-hidden">
-          <div className="absolute -right-3 -top-3 w-20 h-20 bg-emerald-500/10 rounded-full blur-2xl" />
-          <div className="text-xs font-semibold tracking-widest text-slate-400 uppercase mb-2">Best Model Reward</div>
-          <div className="text-4xl font-black text-emerald-400">{bestReward != null ? bestReward.toFixed(2) : "—"}</div>
-        </div>
-      </div>
-
-      <div className="bg-slate-900/70 border border-white/5 rounded-xl p-6">
-        <h2 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
-          <span className="material-symbols-outlined text-indigo-400">query_stats</span> RL Reward Progression
-          {isRunning && <span className="ml-2 flex items-center gap-1.5 bg-indigo-500/10 border border-indigo-500/20 px-2 py-0.5 rounded-full"><div className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-pulse" /><span className="text-[10px] font-bold text-indigo-400">OPTIMIZING</span></span>}
-        </h2>
-        {rewardHistory.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-48 text-slate-500 text-sm">
-            <span className="material-symbols-outlined text-4xl mb-2 opacity-30">show_chart</span>
-            {isRunning ? "Waiting for SB3 initial rollout logs..." : "Start training to observe reward convergence."}
-          </div>
-        ) : (
-          <div className="w-full overflow-hidden border border-white/5 rounded bg-slate-950/50 p-4 relative">
-            <svg viewBox={`0 0 ${hW} ${hH}`} className="w-full h-48 overflow-visible">
-              <polyline points={points} fill="none" stroke="#818cf8" strokeWidth="2" strokeLinejoin="round" />
-            </svg>
-            <div className="absolute top-2 left-4 text-[10px] font-mono text-indigo-300">Max: {maxR.toFixed(1)}</div>
-            <div className="absolute bottom-2 left-4 text-[10px] font-mono text-indigo-300/60">Min: {minR.toFixed(1)}</div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
+  return <TrainingTabV2 tasks={tasks} />;
 }
 
-// ─── Root Dashboard ──────────────────────────────────────────────────────────
 const TABS = [
   { id: "timeline", label: "Timeline", icon: "timeline" },
   { id: "training", label: "Training", icon: "fitness_center" },
   { id: "resources", label: "Resources", icon: "leaderboard" },
-  { id: "library", label: "Library", icon: "menu_book" },
+  { id: "library", label: "Overview", icon: "menu_book" },
   { id: "analytics", label: "Analytics", icon: "analytics" },
 ];
 
 export function Dashboard({ tasks = [] }) {
-  const [activeTab, setActiveTab] = useState("timeline");
+  const [activeTab, setActiveTab] = useState("library");
 
   return (
     <div className="font-body-base min-h-screen flex flex-col pt-16 bg-[#0a0b14] text-white">
@@ -1207,7 +1544,7 @@ export function Dashboard({ tasks = [] }) {
             <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
             <span className="text-xs font-bold text-emerald-400">LIVE</span>
           </div>
-          <div className="text-xs text-slate-500 hidden md:block">Gov Workflow RL · OpenEnv v2.0</div>
+          <div className="text-xs text-slate-500 hidden md:block">Gov Workflow RL | OpenEnv v2.0</div>
         </div>
       </nav>
 
@@ -1225,10 +1562,10 @@ export function Dashboard({ tasks = [] }) {
         </div>
 
         <div className="mb-6">
-          {activeTab === "timeline" && <div><h1 className="text-2xl font-black text-white">Oversight Dashboard</h1><p className="text-sm text-slate-400 mt-1">Watch the AI agent resolve a government workflow backlog in real time — step by step, decision by decision.</p></div>}
+          {activeTab === "timeline" && <div><h1 className="text-2xl font-black text-white">Oversight Dashboard</h1><p className="text-sm text-slate-400 mt-1">Watch the AI agent resolve a government workflow backlog in real time - step by step, decision by decision.</p></div>}
           {activeTab === "training" && <div><h1 className="text-2xl font-black text-white">Reinforcement Learning</h1><p className="text-sm text-slate-400 mt-1">Visualize policy convergence and reward trends as the agent continuously improves.</p></div>}
           {activeTab === "resources" && <div><h1 className="text-2xl font-black text-white">Policy Benchmark</h1><p className="text-sm text-slate-400 mt-1">Compare all three baseline policies head-to-head on identical scenarios to see which strategy wins.</p></div>}
-          {activeTab === "library" && <div><h1 className="text-2xl font-black text-white">Scenario Library</h1><p className="text-sm text-slate-400 mt-1">Explore the environment's task configurations, OpenEnv compliance status, and workflow architecture.</p></div>}
+          {activeTab === "library" && <div><h1 className="text-2xl font-black text-white">Overview</h1><p className="text-sm text-slate-400 mt-1">Explore system behavior, task configurations, OpenEnv compliance status, and workflow architecture.</p></div>}
           {activeTab === "analytics" && <div><h1 className="text-2xl font-black text-white">Performance Analytics</h1><p className="text-sm text-slate-400 mt-1">Review historical simulation runs, trained model checkpoints, and reward improvement evidence.</p></div>}
         </div>
 
@@ -1248,3 +1585,5 @@ export function Dashboard({ tasks = [] }) {
     </div>
   );
 }
+
+

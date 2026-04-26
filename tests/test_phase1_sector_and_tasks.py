@@ -44,7 +44,7 @@ class TestSectorRegistry:
             get_sector_profile("nonexistent_service")  # type: ignore
 
     def test_registry_has_seven_entries(self):
-        assert len(SECTOR_REGISTRY) == 7
+        assert len(SECTOR_REGISTRY) == 8
 
 
 # ─── Individual Sector Profile Values ────────────────────────────────────────
@@ -217,8 +217,11 @@ class TestTaskMedium:
     def test_difficulty(self):
         assert TASK_MEDIUM.difficulty == "medium"
 
-    def test_two_services(self):
-        assert len(TASK_MEDIUM.enabled_services) == 2
+    def test_five_services(self):
+        assert len(TASK_MEDIUM.enabled_services) == 5
+        assert ServiceType.PASSPORT in TASK_MEDIUM.enabled_services
+        assert ServiceType.DRIVING_LICENSE in TASK_MEDIUM.enabled_services
+        assert ServiceType.AADHAAR_CARD in TASK_MEDIUM.enabled_services
 
     def test_max_days_forty_five(self):
         assert TASK_MEDIUM.max_days == 45

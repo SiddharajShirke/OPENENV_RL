@@ -420,6 +420,7 @@ def _repair_action_for_observation(
 
     return action, None
 
+"""
 The high-level simulation orchestration now lives in app.engine.
 This module re-exports the public runtime API so existing imports
 from app.simulator continue to work unchanged.

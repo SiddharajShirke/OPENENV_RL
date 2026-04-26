@@ -13,8 +13,12 @@ from dataclasses import dataclass
 from typing import Any, TYPE_CHECKING
 
 import requests
-from openenv.core import EnvClient
-from openenv.core.env_client import StepResult
+try:
+    from openenv.core import EnvClient
+    from openenv.core.env_client import StepResult
+except ModuleNotFoundError:
+    EnvClient = None  # type: ignore[assignment]
+    StepResult = None  # type: ignore[assignment]
 
 if TYPE_CHECKING:
     from app.models import ActionModel, EpisodeStateModel, ObservationModel, StepInfoModel
@@ -88,31 +92,43 @@ class GovWorkflowClient:
         return EpisodeStateModel(**data["state"])
 
 
-class GovWorkflowOpenEnvClient(
-    EnvClient["ActionModel", "ObservationModel", "EpisodeStateModel"]
-):
-    """
-    OpenEnv-native websocket client.
+if EnvClient is not None and StepResult is not None:
+    class GovWorkflowOpenEnvClient(
+        EnvClient["ActionModel", "ObservationModel", "EpisodeStateModel"]
+    ):
+        """
+        OpenEnv-native websocket client.
 
-    This class is additive and does not replace the existing HTTP client above.
-    """
+        This class is additive and does not replace the existing HTTP client above.
+        """
 
-    def _step_payload(self, action: "ActionModel") -> dict[str, Any]:
-        return action.model_dump(exclude_none=True, mode="json")
+        def _step_payload(self, action: "ActionModel") -> dict[str, Any]:
+            return action.model_dump(exclude_none=True, mode="json")
 
-    def _parse_result(self, payload: dict[str, Any]) -> StepResult["ObservationModel"]:
-        from app.models import ObservationModel
+        def _parse_result(self, payload: dict[str, Any]) -> StepResult["ObservationModel"]:
+            from app.models import ObservationModel
 
-        observation_payload = payload.get("observation", {})
-        obs = ObservationModel(**observation_payload)
-        return StepResult(
-            observation=obs,
-            reward=payload.get("reward"),
-            done=bool(payload.get("done", False)),
-        )
+            observation_payload = payload.get("observation", {})
+            obs = ObservationModel(**observation_payload)
+            return StepResult(
+                observation=obs,
+                reward=payload.get("reward"),
+                done=bool(payload.get("done", False)),
+            )
 
-    def _parse_state(self, payload: dict[str, Any]) -> "EpisodeStateModel":
-        from app.models import EpisodeStateModel
+        def _parse_state(self, payload: dict[str, Any]) -> "EpisodeStateModel":
+            from app.models import EpisodeStateModel
 
-        state_payload = payload.get("state", payload)
-        return EpisodeStateModel(**state_payload)
+            state_payload = payload.get("state", payload)
+            return EpisodeStateModel(**state_payload)
+else:
+    class GovWorkflowOpenEnvClient:  # type: ignore[no-redef]
+        """
+        Placeholder when optional `openenv` package is unavailable.
+        """
+
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            raise ModuleNotFoundError(
+                "GovWorkflowOpenEnvClient requires the optional 'openenv' package. "
+                "Install it to use websocket OpenEnv client features."
+            )

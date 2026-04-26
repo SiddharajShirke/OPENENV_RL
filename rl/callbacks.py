@@ -54,7 +54,25 @@ class GovWorkflowEvalCallback(MaskableEvalCallback):
         os.makedirs(log_path, exist_ok=True)
 
     def _on_step(self) -> bool:
+        eval_due = self.eval_freq > 0 and self.n_calls % self.eval_freq == 0
         result = super()._on_step()
+        if eval_due:
+            mean_reward = float(getattr(self, "last_mean_reward", 0.0) or 0.0)
+            std_reward = 0.0
+            try:
+                if self.evaluations_results and len(self.evaluations_results) > 0:
+                    latest = self.evaluations_results[-1]
+                    if latest is not None and len(latest) > 0:
+                        std_reward = float(np.std(latest))
+            except Exception:
+                std_reward = 0.0
+            # Stable line format for live parser in backend/frontend.
+            print(
+                f"Eval num_timesteps={int(self.num_timesteps)}, "
+                f"episode_reward={mean_reward:.2f} +/- {std_reward:.2f}",
+                flush=True,
+            )
+
         grader_eval_freq = max(self.eval_freq * self.grader_eval_freq_multiplier, 1)
         if self.eval_freq > 0 and self.n_calls % grader_eval_freq == 0:
             grader_score = self._run_grader_eval()

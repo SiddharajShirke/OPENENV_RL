@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview --host 0.0.0.0 --port 4173"
+    "dev": "vite --configLoader native || vite",
+    "build": "vite build --configLoader native || vite build",
+    "preview": "vite preview --configLoader native --host 0.0.0.0 --port 4173 || vite preview --host 0.0.0.0 --port 4173"
   },
   "dependencies": {
     "react": "^18.3.1",

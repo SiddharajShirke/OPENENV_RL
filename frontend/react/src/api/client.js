@@ -3,7 +3,8 @@ const LOCAL_PORTS = ["7860"];
 const LOCAL_HOSTS = ["127.0.0.1", "localhost"];
 
 function candidates(path) {
-  const urls = [`/api${path}`];
+  const urls = [];
+  const rootOnlyPaths = path === "/rl/models";
   const compatNoApiPaths =
     path.startsWith("/simulation/") ||
     path.startsWith("/training/") ||
@@ -11,21 +12,62 @@ function candidates(path) {
     path.startsWith("/openenv/") ||
     path.startsWith("/benchmark") ||
     path.startsWith("/history/");
-  if (compatNoApiPaths) {
-    urls.push(path);
-  }
 
+  let isLocalDev5173 = false;
   if (typeof window !== "undefined") {
     const host = window.location.hostname;
     const isLocal = host === "localhost" || host === "127.0.0.1";
-    if (isLocal && window.location.port === "5173") {
+    isLocalDev5173 = isLocal && window.location.port === "5173";
+  }
+
+  // Training story endpoints are mounted at /training/* (not /api/training/*).
+  // Avoid known-bad prefixes first to prevent noisy 404 logs in browser console.
+  if (path.startsWith("/training/")) {
+    if (isLocalDev5173) {
       for (const port of LOCAL_PORTS) {
         for (const lh of LOCAL_HOSTS) {
+          urls.push(`http://${lh}:${port}${path}`);
+        }
+      }
+    } else {
+      urls.push(path);
+    }
+    return [...new Set(urls)];
+  }
+
+  if (isLocalDev5173) {
+    // For local dev, prefer direct backend URLs first to avoid noisy Vite proxy
+    // connection-refused spam when backend is temporarily down.
+    for (const port of LOCAL_PORTS) {
+      for (const lh of LOCAL_HOSTS) {
+        if (rootOnlyPaths) {
+          urls.push(`http://${lh}:${port}${path}`);
+        } else {
           urls.push(`http://${lh}:${port}/api${path}`);
+          urls.push(`http://${lh}:${port}/api/v1${path}`);
           if (compatNoApiPaths) {
             urls.push(`http://${lh}:${port}${path}`);
           }
         }
+      }
+    }
+  }
+
+  if (rootOnlyPaths) {
+    urls.push(path);
+  } else {
+    urls.push(`/api${path}`, `/api/v1${path}`);
+    if (compatNoApiPaths) {
+      urls.push(path);
+    }
+  }
+
+  if (isLocalDev5173 && !rootOnlyPaths) {
+    for (const port of LOCAL_PORTS) {
+      for (const lh of LOCAL_HOSTS) {
+        // keep original ordering as fallback candidates
+        urls.push(`http://${lh}:${port}/api${path}`);
+        urls.push(`http://${lh}:${port}/api/v1${path}`);
       }
     }
   }

@@ -1,45 +1,65 @@
-# Python
+# VCS / local env
+.git/
+.gitignore
+.venv/
+.venv313/
+.env
+.env.*
+!.env.example
+
+# Python cache/build
 __pycache__/
 *.pyc
 *.pyo
-.venv/
-.venv313/
 *.egg-info/
 dist/
 build/
+
+# Frontend cache/deps
 frontend/react/node_modules/
+frontend/react/.vite/
+frontend/react/.vite-temp/
 frontend/react/dist/
+.npm-cache/
+.vite/
 
-# Environment secrets
-.env
-.env.local
-.env.production
+# Runtime/generated data not needed in image build context
+logs/
+reports/
+outputs/
+data/
+results/training_runs/
+results/runs/
+results/eval_logs/
+results/best_model/archived/
+artifacts/
+results/prevalidation_*.log
 
-# Git
-.git/
-.gitignore
-
-# Results and caches
+# Test/dev-only assets
 .pytest_cache/
 .tmp/
+docs/
+examples/
+tests/
+gov_workflow_openenv_tests/
 pip_bootstrap/
-outputs/
 test_results.txt
 test_rl_output*.txt
 tests/test_output*.txt
 tests/test_run.txt
+phase1_validation.py
+test_phase2.py
+old_simulator.py
+restore_simulator.py
 
-# IDE / OS
+# Non-runtime docs/notebooks
+GovWorkflow_RL_ENV.ipynb
+Blog.md
+uv.lock
+
+# IDE/OS noise
 .vscode/
 .idea/
 *.swp
 Thumbs.db
 .DS_Store
-
-# Docker
-.dockerignore
-
-# NVIDIA model test artifacts
-nvidia_models.txt
-tests/test_output*.txt
-tests/test_run.txt

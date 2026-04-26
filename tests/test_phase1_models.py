@@ -17,14 +17,14 @@ class TestEnums:
 
     def test_service_types_count(self):
         from app.models import ServiceType
-        assert len(ServiceType) == 7
+        assert len(ServiceType) == 8
 
     def test_all_service_types_present(self):
         from app.models import ServiceType
         expected = {
             "passport", "driving_license", "gst_registration",
             "income_certificate", "caste_certificate",
-            "birth_certificate", "land_registration",
+            "birth_certificate", "land_registration", "aadhaar_card",
         }
         assert {s.value for s in ServiceType} == expected
 
